@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Descarga Masiva de Adjuntos - Mercado Público",
+  "version": "4.1.0",
+  "description": "Herramientas de automatización de descarga y gestión para Mercado Público (Compra Ágil).",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.mercadopublico.cl/*"
+      ],
+      "js": [
+        "content.js",
+        "highlight_offers.js",
+        "bulk_editor.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "api_interceptor.js"
+      ],
+      "matches": [
+        "https://*.mercadopublico.cl/*"
+      ]
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*.mercadopublico.cl/*"
+  ]
+}
