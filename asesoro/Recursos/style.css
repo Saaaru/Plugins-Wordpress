@@ -1,0 +1,293 @@
+/* =========================================
+   VARIABLES Y CONFIGURACIÓN DE COLOR
+   ========================================= */
+:root {
+    /* 
+       Aquí intentamos "adivinar" el color de tu web buscando variables comunes.
+       Orden de búsqueda: 
+       1. Gutenberg/Bloques 
+       2. Elementor Global 
+       3. Variables genéricas de temas (Astra, OceanWP, etc)
+       4. Fallback: #333 (Gris oscuro)
+    */
+    --srl-primary: var(--wp--preset--color--primary, var(--e-global-color-primary, var(--primary-color, var(--accent-color, #333))));
+
+    /* Color de texto para contrastar sobre el color primario (generalmente blanco) */
+    --srl-text-on-primary: #fff;
+}
+
+/* Wrapper Principal */
+.srl-wrapper {
+    max-width: 1200px;
+    margin: 40px auto;
+    font-family: inherit;
+    /* Aseguramos que los inputs/box-sizing sean correctos */
+    box-sizing: border-box;
+}
+
+.srl-wrapper *,
+.srl-wrapper *::before,
+.srl-wrapper *::after {
+    box-sizing: inherit;
+}
+
+/* --- FILTROS (PILLS) --- */
+.srl-filters {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 40px;
+}
+
+.srl-filter-btn {
+    background: transparent;
+    border: 1px solid #ccc;
+    padding: 8px 25px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: inherit;
+    transition: all 0.3s ease;
+    font-family: inherit;
+    opacity: 0.7;
+}
+
+.srl-filter-btn:hover {
+    border-color: var(--srl-primary);
+    color: var(--srl-primary);
+    opacity: 1;
+}
+
+/* Estado Activo: Se llena con tu color corporativo */
+.srl-filter-btn.active {
+    background-color: var(--srl-primary);
+    border-color: var(--srl-primary);
+    color: var(--srl-text-on-primary);
+    opacity: 1;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* --- GRID SYSTEM --- */
+.srl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+}
+
+/* --- TARJETA --- */
+.srl-card {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.srl-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    border-color: var(--srl-primary);
+    /* Borde sutil al hacer hover */
+}
+
+.srl-card.hidden {
+    display: none;
+}
+
+/* Imagen y Badge */
+.srl-thumb-wrapper {
+    position: relative;
+    height: 180px;
+    background: #f4f4f4;
+    overflow: hidden;
+}
+
+.srl-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.srl-card:hover .srl-thumb {
+    transform: scale(1.05);
+}
+
+.srl-type-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-transform: uppercase;
+}
+
+/* Contenido */
+.srl-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.srl-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    line-height: 1.3;
+    color: inherit;
+}
+
+.srl-desc {
+    font-size: 0.9rem;
+    color: inherit;
+    opacity: 0.8;
+    margin-bottom: 20px;
+    flex-grow: 1;
+}
+
+.srl-desc p {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* --- BOTÓN DESCARGAR --- 
+   Ahora usa la variable --srl-primary
+*/
+.srl-download-btn {
+    background-color: transparent;
+    color: var(--srl-primary);
+    /* Texto del color de la web */
+    border: 2px solid var(--srl-primary);
+    /* Borde del color de la web */
+    padding: 10px;
+    width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    transition: all 0.3s;
+    font-family: inherit;
+}
+
+.srl-download-btn:hover {
+    background-color: var(--srl-primary);
+    color: var(--srl-text-on-primary);
+    /* Texto blanco al hacer hover */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* --- MODAL POPUP --- */
+.srl-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(2px);
+}
+
+.srl-modal-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.srl-modal-box {
+    background: #fff;
+    width: 90%;
+    max-width: 550px;
+    border-radius: 8px;
+    padding: 40px;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+/* Borde superior decorativo en el modal con el color del tema */
+.srl-modal-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: var(--srl-primary);
+    border-radius: 8px 8px 0 0;
+}
+
+.srl-modal-overlay.open .srl-modal-box {
+    transform: translateY(0);
+}
+
+.srl-close-modal {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    color: #ccc;
+    line-height: 1;
+    transition: color 0.3s;
+}
+
+.srl-close-modal:hover {
+    color: var(--srl-primary);
+}
+
+.srl-modal-title {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: inherit;
+}
+
+.srl-modal-subtitle {
+    margin-bottom: 25px;
+    color: inherit;
+    opacity: 0.8;
+}
+
+.srl-modal-content {
+    margin-bottom: 20px;
+}
+
+.srl-disclaimer {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 15px;
+}
+
+.srl-hidden-form-source {
+    visibility: hidden;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+    position: absolute;
+    z-index: -1;
+    left: -9999px;
+    /* Lo mandamos lejos por si acaso */
+}

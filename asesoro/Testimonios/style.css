@@ -1,0 +1,253 @@
+/* CSS for Simple Testimonials Slider - Premium Version */
+
+:root {
+    --sts-bg: #ffffff;
+    --sts-card-bg: #ffffff;
+    --sts-text: #2d3436;
+    --sts-accent: #FF4F00;
+    --sts-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    --sts-border: rgba(0, 0, 0, 0.05);
+    --sts-transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.sts-wrapper {
+    max-width: 1200px;
+    margin: 60px auto;
+    position: relative;
+    width: 95%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Contenedor Flex de Flechas y Slider */
+.sts-plugin-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+}
+
+/* Botones de navegación (Flechas) */
+.sts-nav-btn {
+    background: var(--sts-bg);
+    border: 1px solid var(--sts-border);
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--sts-text);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    transition: var(--sts-transition);
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.sts-nav-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    background: var(--sts-accent);
+    color: #fff;
+    border-color: var(--sts-accent);
+}
+
+.sts-nav-btn:active {
+    transform: translateY(0);
+}
+
+/* Viewport - Aumentamos padding para evitar que las sombras se corten */
+.sts-slider-viewport {
+    overflow: hidden;
+    width: 100%;
+    padding: 30px 5px 60px 5px;
+    /* Más espacio abajo para la sombra y arriba para el hover */
+    margin-top: -20px;
+    /* Compensamos el padding superior */
+}
+
+.sts-slider-track {
+    display: flex;
+    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+    width: 100%;
+    align-items: stretch;
+    /* Asegura que todas las tarjetas ocupen el mismo alto */
+}
+
+/* TARJETA */
+.sts-card {
+    box-sizing: border-box;
+    flex-shrink: 0;
+    padding: 15px;
+    width: 100%;
+    display: flex;
+    /* Para que el inner-card pueda estirarse */
+}
+
+@media (min-width: 640px) {
+    .sts-card {
+        width: 50%;
+    }
+}
+
+@media (min-width: 1024px) {
+    .sts-card {
+        width: 33.333%;
+    }
+}
+
+/* Tarjeta Interna */
+.sts-inner-card {
+    background: var(--sts-card-bg);
+    border-radius: 20px;
+    padding: 35px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: var(--sts-shadow);
+    border: 1px solid var(--sts-border);
+    transition: var(--sts-transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.sts-inner-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* Icono de comilla decorativo */
+.sts-inner-card::before {
+    content: "“";
+    position: absolute;
+    top: -10px;
+    right: 20px;
+    font-size: 8rem;
+    color: var(--sts-accent);
+    opacity: 0.05;
+    font-family: serif;
+    pointer-events: none;
+}
+
+/* Contenido Texto */
+.sts-content {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: #4a5568;
+    margin-bottom: 20px;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sts-content p {
+    margin-bottom: 15px;
+}
+
+.sts-content.expanded {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+
+.sts-read-more {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--sts-accent);
+    margin-bottom: 25px;
+    display: inline-flex;
+    align-items: center;
+    transition: opacity 0.2s;
+}
+
+.sts-read-more:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Autor */
+.sts-author-block {
+    display: flex;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid var(--sts-border);
+}
+
+.sts-thumb {
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 15px;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.sts-author-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.sts-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--sts-text);
+}
+
+.sts-company {
+    font-size: 0.8rem;
+    color: #718096;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* PUNTOS DE PAGINACIÓN */
+.sts-dots-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 30px;
+    gap: 12px;
+}
+
+.sts-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: #cbd5e0;
+    cursor: pointer;
+    transition: var(--sts-transition);
+    border: none;
+    padding: 0;
+}
+
+.sts-dot.active {
+    width: 24px;
+    background-color: var(--sts-accent);
+}
+
+/* Optimizaciones para móvil */
+@media (max-width: 600px) {
+    .sts-plugin-container {
+        gap: 10px;
+    }
+
+    .sts-nav-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 1rem;
+    }
+
+    .sts-inner-card {
+        padding: 25px;
+    }
+}
