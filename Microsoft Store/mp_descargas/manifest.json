@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Descarga Masiva de Adjuntos - Mercado Público",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Herramientas de automatización de descarga y gestión para Mercado Público (Compra Ágil).",
   "icons": {
     "16": "icon.png",
@@ -37,7 +37,6 @@
     }
   ],
   "permissions": [
-    "activeTab",
     "downloads"
   ],
   "host_permissions": [
