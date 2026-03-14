@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () {
+window.addEventListener('load', function () {
     const container = document.getElementById('sts-container');
     if (!container) return;
 

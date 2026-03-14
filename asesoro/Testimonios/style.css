@@ -70,10 +70,13 @@
 
 .sts-slider-track {
     display: flex;
-    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+    gap: 0;
+    transition: transform 0.5s ease-in-out;
     width: 100%;
     align-items: stretch;
     /* Asegura que todas las tarjetas ocupen el mismo alto */
+    /* Evita que las tarjetas se amontonen verticalmente antes de que cargue el JS */
+    flex-wrap: nowrap; 
 }
 
 /* TARJETA */
@@ -81,20 +84,21 @@
     box-sizing: border-box;
     flex-shrink: 0;
     padding: 15px;
-    width: 100%;
     display: flex;
     /* Para que el inner-card pueda estirarse */
+    /* Pre-reserva el espacio de 3 columnas en escritorio para evitar el salto */
+    flex: 0 0 100%; 
 }
 
 @media (min-width: 640px) {
     .sts-card {
-        width: 50%;
+        flex: 0 0 50%;
     }
 }
 
 @media (min-width: 1024px) {
     .sts-card {
-        width: 33.333%;
+        flex: 0 0 33.333%;
     }
 }
 

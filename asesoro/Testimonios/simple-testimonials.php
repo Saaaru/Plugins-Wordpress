@@ -97,9 +97,19 @@ add_action('save_post', 'sts_save_meta_box');
 // 3. CARGAR SCRIPTS Y ESTILOS
 function sts_enqueue_assets()
 {
-    // Solo cargamos si el shortcode está presente (opcional, aquí lo cargamos siempre para simplificar)
+    // Solo cargar si no estamos en el admin
+    if (is_admin()) return;
+
     wp_enqueue_style('sts-style', plugin_dir_url(__FILE__) . 'style.css');
-    wp_enqueue_script('sts-script', plugin_dir_url(__FILE__) . 'script.js', array(), '1.0', true);
+    
+    // Añadimos 'defer' para que no bloquee el renderizado inicial
+    wp_enqueue_script('sts-script', plugin_dir_url(__FILE__) . 'script.js', array(), '1.5', true);
+    
+    // Script para añadir el atributo defer automáticamente
+    add_filter('script_loader_tag', function($tag, $handle) {
+        if ('sts-script' !== $handle) return $tag;
+        return str_replace(' src', ' defer src', $tag);
+    }, 10, 2);
 }
 add_action('wp_enqueue_scripts', 'sts_enqueue_assets');
 
@@ -138,7 +148,7 @@ function sts_shortcode_function()
                         $company = get_post_meta(get_the_ID(), '_testimonial_company', true);
                         $thumb_url = get_the_post_thumbnail_url(get_the_ID(), 'thumbnail');
                         if (!$thumb_url) {
-                            $thumb_url = 'https://www.gravatar.com/avatar/?d=mp&s=150';
+                            $thumb_url = get_template_directory_uri() . '/assets/images/default-avatar.png';
                         }
                         ?>
 
