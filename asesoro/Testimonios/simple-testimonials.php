@@ -94,24 +94,23 @@ function sts_save_meta_box($post_id)
 }
 add_action('save_post', 'sts_save_meta_box');
 
-// 3. CARGAR SCRIPTS Y ESTILOS
-function sts_enqueue_assets()
+// 3. REGISTRAR SCRIPTS Y ESTILOS (Lazy Loading)
+function sts_register_assets()
 {
-    // Solo cargar si no estamos en el admin
     if (is_admin()) return;
 
-    wp_enqueue_style('sts-style', plugin_dir_url(__FILE__) . 'style.css');
-    
-    // Añadimos 'defer' para que no bloquee el renderizado inicial
-    wp_enqueue_script('sts-script', plugin_dir_url(__FILE__) . 'script.js', array(), '1.5', true);
-    
-    // Script para añadir el atributo defer automáticamente
-    add_filter('script_loader_tag', function($tag, $handle) {
-        if ('sts-script' !== $handle) return $tag;
-        return str_replace(' src', ' defer src', $tag);
-    }, 10, 2);
+    wp_register_style('sts-style', plugin_dir_url(__FILE__) . 'style.css');
+    wp_register_script('sts-script', plugin_dir_url(__FILE__) . 'script.js', array(), '1.5', true);
 }
-add_action('wp_enqueue_scripts', 'sts_enqueue_assets');
+add_action('wp_enqueue_scripts', 'sts_register_assets');
+
+// Hook para asegurar defer
+add_filter('script_loader_tag', function($tag, $handle) {
+    if ('sts-script' === $handle && strpos($tag, 'defer') === false) {
+        return str_replace(' src', ' defer src', $tag);
+    }
+    return $tag;
+}, 10, 2);
 
 // 4. CREAR EL SHORTCODE [ver_testimonios]
 function sts_shortcode_function()
@@ -130,6 +129,10 @@ function sts_shortcode_function()
     }
 
     ob_start();
+    
+    // Encolar condicionalmente los estilos y scripts solo si el shortcode se renderiza
+    wp_enqueue_style('sts-style');
+    wp_enqueue_script('sts-script');
     ?>
 
     <!-- Contenedor Principal -->
@@ -164,7 +167,7 @@ function sts_shortcode_function()
 
                                 <div class="sts-author-block">
                                     <img src="<?php echo esc_url($thumb_url); ?>" alt="<?php echo esc_attr(get_the_title()); ?>"
-                                        class="sts-thumb">
+                                        class="sts-thumb" width="55" height="55">
                                     <div class="sts-author-details">
                                         <div class="sts-name"><?php echo esc_html(get_the_title()); ?></div>
                                         <?php if ($company): ?>

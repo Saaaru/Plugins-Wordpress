@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const slides = container.querySelectorAll('.sts-card');
     const dotsContainer = document.getElementById('sts-dots');
     const readMoreBtns = container.querySelectorAll('.sts-read-more');
+    const prevBtn = container.querySelector('.sts-prev');
+    const nextBtn = container.querySelector('.sts-next');
 
     let currentIndex = 0;
     const totalSlides = slides.length;
@@ -23,34 +25,56 @@ document.addEventListener('DOMContentLoaded', function () {
         const width = window.innerWidth;
         itemsPerView = (width >= 1024) ? 3 : (width >= 640 ? 2 : 1);
         
-        // Usamos requestAnimationFrame para evitar Forced Reflow
         requestAnimationFrame(() => {
             createDots();
             updateSliderPosition();
-            checkReadMoreButtons();
         });
     }
 
-    function checkReadMoreButtons() {
-        // BATCH READING: Leemos todas las medidas primero
-        const tasks = Array.from(readMoreBtns).map(btn => {
-            const textContent = document.getElementById(btn.getAttribute('data-target'));
-            return {
-                btn,
-                shouldHide: textContent.scrollHeight <= textContent.clientHeight
-            };
+    // --- EVITAR FORCED REFLOW ---
+    // IntersectionObserver para "Ver más"
+    if (window.IntersectionObserver) {
+        const ro = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const btn = entry.target;
+                    const targetId = btn.getAttribute('data-target');
+                    if (targetId) {
+                        const textContent = document.getElementById(targetId);
+                        if (textContent) {
+                            requestAnimationFrame(() => {
+                                const shouldHide = textContent.scrollHeight <= textContent.clientHeight;
+                                btn.style.display = shouldHide ? 'none' : 'inline-flex';
+                            });
+                        }
+                    }
+                    ro.unobserve(btn);
+                }
+            });
         });
 
-        // BATCH WRITING: Aplicamos los cambios de estilo juntos
-        tasks.forEach(task => {
-            task.btn.style.display = task.shouldHide ? 'none' : 'inline-flex';
+        readMoreBtns.forEach(btn => ro.observe(btn));
+    } else {
+        requestAnimationFrame(() => {
+            readMoreBtns.forEach(btn => {
+                const targetId = btn.getAttribute('data-target');
+                if (targetId) {
+                    const textContent = document.getElementById(targetId);
+                    if (textContent) {
+                        const shouldHide = textContent.scrollHeight <= textContent.clientHeight;
+                        btn.style.display = shouldHide ? 'none' : 'inline-flex';
+                    }
+                }
+            });
         });
     }
 
     function updateSliderPosition() {
+        if (totalSlides === 0) return;
         const slideWidth = 100 / itemsPerView;
         const maxIndex = Math.max(0, totalSlides - itemsPerView);
         if (currentIndex > maxIndex) currentIndex = maxIndex;
+        // Batch DOM Updates
         track.style.transform = `translateX(${-currentIndex * slideWidth}%)`;
         updateDots();
     }
@@ -86,13 +110,32 @@ document.addEventListener('DOMContentLoaded', function () {
         updateSliderPosition();
     }
 
-    // Eventos y Autoplay (Simplificado)
+    // Botones Prev/Next (Reparación del slider pegado)
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            moveSlide(-1);
+            resetTimer();
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            moveSlide(1);
+            resetTimer();
+        });
+    }
+
+    // Expansión del texto
     readMoreBtns.forEach(btn => {
         btn.onclick = function() {
-            const target = document.getElementById(this.getAttribute('data-target'));
-            const isExpanded = target.classList.toggle('expanded');
-            this.textContent = isExpanded ? "Ver menos" : "Ver más";
-            isExpanded ? stopAutoPlay() : startAutoPlay();
+            const targetId = this.getAttribute('data-target');
+            if (targetId) {
+                const target = document.getElementById(targetId);
+                if (target) {
+                    const isExpanded = target.classList.toggle('expanded');
+                    this.textContent = isExpanded ? "Ver menos" : "Ver más";
+                    isExpanded ? stopAutoPlay() : startAutoPlay();
+                }
+            }
         };
     });
 

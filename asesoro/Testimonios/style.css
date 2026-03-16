@@ -76,7 +76,7 @@
     align-items: stretch;
     /* Asegura que todas las tarjetas ocupen el mismo alto */
     /* Evita que las tarjetas se amontonen verticalmente antes de que cargue el JS */
-    flex-wrap: nowrap; 
+    flex-wrap: nowrap;
 }
 
 /* TARJETA */
@@ -87,7 +87,7 @@
     display: flex;
     /* Para que el inner-card pueda estirarse */
     /* Pre-reserva el espacio de 3 columnas en escritorio para evitar el salto */
-    flex: 0 0 100%; 
+    flex: 0 0 100%;
 }
 
 @media (min-width: 640px) {
@@ -108,6 +108,7 @@
     border-radius: 20px;
     padding: 35px;
     height: 100%;
+    min-height: 250px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -144,6 +145,7 @@
     margin-bottom: 20px;
     display: -webkit-box;
     -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -154,6 +156,7 @@
 
 .sts-content.expanded {
     -webkit-line-clamp: unset;
+    line-clamp: unset;
     overflow: visible;
 }
 
