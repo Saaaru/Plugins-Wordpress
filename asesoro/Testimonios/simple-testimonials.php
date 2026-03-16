@@ -104,10 +104,10 @@ function sts_register_assets()
 }
 add_action('wp_enqueue_scripts', 'sts_register_assets');
 
-// Hook para asegurar defer
+// Filtro para excluir la optimización de LiteSpeed y evitar roturas en modo incógnito
 add_filter('script_loader_tag', function($tag, $handle) {
-    if ('sts-script' === $handle && strpos($tag, 'defer') === false) {
-        return str_replace(' src', ' defer src', $tag);
+    if ('sts-script' === $handle) {
+        return str_replace(' src', ' data-no-defer="1" src', $tag);
     }
     return $tag;
 }, 10, 2);

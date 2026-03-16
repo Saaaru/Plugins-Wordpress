@@ -128,9 +128,17 @@ add_action('admin_enqueue_scripts', 'srl_enqueue_admin');
 function srl_enqueue_frontend()
 {
     wp_enqueue_style('srl-style', plugin_dir_url(__FILE__) . 'style.css');
-    wp_enqueue_script('srl-script', plugin_dir_url(__FILE__) . 'script.js', array(), '1.0', true);
+    wp_enqueue_script('srl-script', plugin_dir_url(__FILE__) . 'script.js', array('jquery'), '1.0', true);
 }
 add_action('wp_enqueue_scripts', 'srl_enqueue_frontend');
+
+// Filtro para excluir la optimización de LiteSpeed y evitar roturas en modo incógnito
+add_filter('script_loader_tag', function($tag, $handle) {
+    if ('srl-script' === $handle) {
+        return str_replace(' src', ' data-no-defer="1" src', $tag);
+    }
+    return $tag;
+}, 10, 2);
 
 // 4. AJUSTES (FORMULARIO POR DEFECTO)
 function srl_add_admin_menu()
@@ -208,7 +216,7 @@ function srl_shortcode_function()
                     <!-- TARJETA -->
                     <div class="srl-card" data-categories="<?php echo esc_attr(implode(' ', $term_slugs)); ?>">
                         <div class="srl-thumb-wrapper">
-                            <img src="<?php echo esc_url($thumb); ?>" class="srl-thumb">
+                            <img src="<?php echo esc_url($thumb); ?>" class="srl-thumb" width="300" height="200">
                             <?php if ($file_type): ?><span class="srl-type-badge">
                                     <?php echo esc_html($file_type); ?>
                                 </span>
@@ -223,16 +231,10 @@ function srl_shortcode_function()
                             </div>
 
                             <!-- El botón sabe qué archivo quiere Y dónde está su formulario específico -->
-<<<<<<< HEAD
                             <button class="srl-download-btn" data-title="<?php echo esc_attr(get_the_title()); ?>"
                                 data-file-url="<?php echo esc_url($file_url); ?>"
                                 data-form-source="<?php echo esc_attr($unique_id); ?>"
-                                onclick="srlOpenModal(this)">Descargar</button>
-=======
-                            <button class="srl-download-btn" data-title="<?php the_title(); ?>"
-                                data-file-url="<?php echo esc_url($file_url); ?>" data-form-source="<?php echo $unique_id; ?>"
                                 onclick="srlOpenModal(this)"><?php _e('Descargar', 'simple-resources'); ?></button>
->>>>>>> 659c3e4b4ffc1c7c89ce62fe642eb0918eee5012
                         </div>
 
                         <!-- FORMULARIO OCULTO (Pre-renderizado) -->

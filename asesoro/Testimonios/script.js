@@ -18,10 +18,13 @@ document.addEventListener('DOMContentLoaded', function () {
     let resizeTimer;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(updateItemsPerView, 250);
+        resizeTimer = setTimeout(() => {
+            requestAnimationFrame(updateItemsPerView);
+        }, 250);
     });
 
     function updateItemsPerView() {
+        // window.innerWidth es seguro, pero envolvemos el resto para evitar Forced Reflow
         const width = window.innerWidth;
         itemsPerView = (width >= 1024) ? 3 : (width >= 640 ? 2 : 1);
         
@@ -42,8 +45,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (targetId) {
                         const textContent = document.getElementById(targetId);
                         if (textContent) {
+                            // Medición geométrica asíncrona
                             requestAnimationFrame(() => {
-                                const shouldHide = textContent.scrollHeight <= textContent.clientHeight;
+                                const currentScroll = textContent.scrollHeight;
+                                const currentClient = textContent.clientHeight;
+                                const shouldHide = currentScroll <= currentClient;
                                 btn.style.display = shouldHide ? 'none' : 'inline-flex';
                             });
                         }
@@ -74,9 +80,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const slideWidth = 100 / itemsPerView;
         const maxIndex = Math.max(0, totalSlides - itemsPerView);
         if (currentIndex > maxIndex) currentIndex = maxIndex;
-        // Batch DOM Updates
-        track.style.transform = `translateX(${-currentIndex * slideWidth}%)`;
-        updateDots();
+        // Batch DOM Updates en el siguiente frame
+        requestAnimationFrame(() => {
+            track.style.transform = `translateX(${-currentIndex * slideWidth}%)`;
+            updateDots();
+        });
     }
 
     function createDots() {
@@ -110,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateSliderPosition();
     }
 
-    // Botones Prev/Next (Reparación del slider pegado)
+    // Botones Prev/Next
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
             moveSlide(-1);
@@ -131,9 +139,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (targetId) {
                 const target = document.getElementById(targetId);
                 if (target) {
-                    const isExpanded = target.classList.toggle('expanded');
-                    this.textContent = isExpanded ? "Ver menos" : "Ver más";
-                    isExpanded ? stopAutoPlay() : startAutoPlay();
+                    requestAnimationFrame(() => {
+                        const isExpanded = target.classList.toggle('expanded');
+                        this.textContent = isExpanded ? "Ver menos" : "Ver más";
+                        isExpanded ? stopAutoPlay() : startAutoPlay();
+                    });
                 }
             }
         };
@@ -149,7 +159,9 @@ document.addEventListener('DOMContentLoaded', function () {
     container.onmouseenter = stopAutoPlay;
     container.onmouseleave = startAutoPlay;
 
-    // Inicializar
-    updateItemsPerView();
-    startAutoPlay();
+    // Inicializar de forma asíncrona para no bloquear el hilo principal en carga
+    requestAnimationFrame(() => {
+        updateItemsPerView();
+        startAutoPlay();
+    });
 });
