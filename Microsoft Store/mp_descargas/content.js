@@ -216,6 +216,99 @@
         });
     }
 
+    function handleExportOffersExcel() {
+        const cards = Array.from(document.querySelectorAll('.MuiPaper-root'));
+        const data = [];
+
+        for (const card of cards) {
+            const fichaAnchor = card.querySelector('a[href*="proveedor.mercadopublico.cl/ficha"]');
+            if (!fichaAnchor) continue; // Not an offer card
+
+            const razonSocial = fichaAnchor.textContent.trim();
+            
+            // Find RUT
+            let rut = '';
+            const rutMatch = card.innerHTML.match(/\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b/);
+            if (rutMatch) {
+                rut = rutMatch[0];
+            }
+
+            // Find Vigencia
+            let vigencia = '';
+            const vigenciaEl = Array.from(card.querySelectorAll('span, p')).find(el => el.textContent.includes('VIGENCIA:'));
+            if (vigenciaEl) {
+                vigencia = vigenciaEl.textContent.replace('VIGENCIA:', '').trim();
+            }
+
+            // Find Price
+            let price = '';
+            const priceEl = card.querySelector('h3');
+            if (priceEl && priceEl.textContent.includes('$')) {
+                price = priceEl.textContent.trim();
+            }
+
+            // Find Description
+            let description = '';
+            const paragraphs = Array.from(card.querySelectorAll('p'));
+            const descEl = paragraphs.find(p => {
+                const text = p.textContent.trim();
+                return text && 
+                       !text.match(/\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b/) && 
+                       text !== 'Monto total' && 
+                       !text.includes('Recibiste');
+            });
+            if (descEl) {
+                description = descEl.textContent.trim();
+            }
+
+            // Check if marked INADMISIBLE
+            const isInadmisible = Array.from(card.querySelectorAll('span, div, p')).some(el => el.textContent.trim() === 'INADMISIBLE');
+
+            data.push({
+                razonSocial,
+                rut,
+                description,
+                vigencia,
+                price,
+                inadmisible: isInadmisible ? 'SÍ' : 'NO'
+            });
+        }
+
+        if (data.length === 0) {
+            alert("No se encontraron datos de ofertas en la pantalla para exportar.");
+            return;
+        }
+
+        // Generate CSV content with semicolon separator and UTF-8 BOM
+        const headers = ["Razón Social", "RUT", "Descripción de la Oferta", "Vigencia", "Monto Total", "Inadmisible"];
+        const csvRows = [
+            headers.join(";"),
+            ...data.map(row => [
+                `"${row.razonSocial.replace(/"/g, '""')}"`,
+                `"${row.rut.replace(/"/g, '""')}"`,
+                `"${row.description.replace(/"/g, '""')}"`,
+                `"${row.vigencia.replace(/"/g, '""')}"`,
+                `"${row.price.replace(/"/g, '""')}"`,
+                `"${row.inadmisible.replace(/"/g, '""')}"`
+            ].join(";"))
+        ];
+
+        const csvContent = "\ufeff" + csvRows.join("\r\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        
+        const quotaCode = extractQuotationCode() || 'exportacion';
+        link.setAttribute("download", `Ofertas_${quotaCode}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
     function injectDownloadAllButton() {
         if (document.getElementById(CONFIG.ids.downloadAllButton)) return;
 
@@ -248,7 +341,27 @@
         });
         button.onclick = handleDownloadAllOffers;
 
-        // Inyectamos el botón después del contenedor del texto (al lado, no dentro)
+        const excelBtn = document.createElement('button');
+        excelBtn.id = 'mp-export-offers-excel';
+        excelBtn.textContent = '📊 Exportar tabla a Excel';
+        Object.assign(excelBtn.style, {
+            marginLeft: '10px',
+            padding: '6px 12px',
+            backgroundColor: '#1f7246', // Green color representing Excel
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 'normal',
+            display: 'inline-block',
+            textAlign: 'center',
+            verticalAlign: 'middle'
+        });
+        excelBtn.onclick = handleExportOffersExcel;
+
+        // Inyectamos los botones después del contenedor del texto
+        injectionWrapper.insertAdjacentElement('afterend', excelBtn);
         injectionWrapper.insertAdjacentElement('afterend', button);
     }
 
