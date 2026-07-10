@@ -1,8 +1,52 @@
 # Plan: Descarga Masiva de Adjuntos — Licitaciones (Voucher View)
 
-> **Status:** Approved — pending implementation
+> **Status:** Implemented (pivoted) — see "Pivot (2026)" below
 > **Target module:** Legacy ASP.NET portal `voucherview.aspx` (Licitaciones / RFB)
 > **Extension:** MP Tools (Manifest V3) — `mp_descargas`
+
+> ## ⚠️ Pivot (2026) — descarga desde la página principal, no desde el popup
+> La inyección en la **ventana emergente** `voucherview.aspx` resultó **imposible en Edge**:
+> el popup es *chromeless* (sin barra de extensiones) y tanto los `content_scripts` del
+> manifest como `chrome.scripting.executeScript` son **bloqueados** (`"Blocked"`), incluso
+> en ventana fresca/no-incógnito y solo frame superior. Por tanto se abandonó la vía del popup.
+>
+> **Arquitectura definitiva (implementada):**
+> - Nuevo content script [`licitaciones_download.js`](../licitaciones_download.js:1) detecta en la
+>   grilla de ofertas (`grdSupplies`) los botones "Ver Comprobante de oferta" (`imgView` con
+>   `onclick` → `voucherview.aspx?enc=…`) e inyecta un botón 📥 junto a cada uno.
+> - Al pulsarlo: obtiene el HTML del voucher **por `enc` con `fetch`** (mismo origen, credenciales
+>   incluidas), página por página (GET la 1; POST con `__doPostBack('UcVoucherView1$DWNL$grdId','Page$N')`
+>   para paginar), y lo parsea con `DOMParser` (grilla `grdId` + `__VIEWSTATE` son server-rendered).
+> - Envía cada página al **background** con la acción existente `downloadVoucherFiles`
+>   ([`voucher_background.js`](../voucher_background.js:121)), que replica el POST "Ver Anexo"
+>   (captcha-free) y guarda el archivo en `Licitacion_<código>/<proveedor>/`.
+> - `voucher_content.js` queda como módulo *durmiente* (sólo actuaría si el popup volviera a ser
+>   scripteable); su beacon/diagnóstico se conserva.
+> - El permiso `scripting` y la inyección programática se eliminaron (no funcionaban en el popup).
+> - `GetAllDocsAgregados` se descartó: envía un token opaco y devuelve `[]`.
+
+> ## ✅ SOLUCIÓN FUNCIONANTE (2026) — Script de consola en el frame de la grilla
+> **Causa raíz real:** la grilla `grdSupplies` ("Resumen de ofertas", `SupplySummary.aspx`) vive en un **frame
+> anidado con barrera de origen** dentro de `Menu.aspx`. Por eso (a) los content_scripts del manifest y la
+> inyección programática (`executeScript` → "Blocked") nunca la alcanzaban, y (b) un walk JS desde el top
+> devolvía 0. Además Edge bloquea la extensión por sitio en `www.mercadopublico.cl`.
+>
+> **Solución que funciona:** [`debug/licitaciones_downloader_console.js`](../debug/licitaciones_downloader_console.js:1),
+> un script de **mundo MAIN** que se pega en la consola **del frame `SupplySummary.aspx`** (se llega vía
+> clic derecho → Inspeccionar sobre la grilla → pestaña Console → desplegable de frame → elegir
+> `SupplySummary.aspx`). Ahí `document` es la grilla: detecta los botones "Ver Comprobante de oferta"
+> (`imgView` con `onclick` → `voucherview.aspx?enc=…`), inyecta 📥, y al pulsarlo:
+> `fetch` al voucher por `enc` (mismo origen), página por página (GET la 1; POST con `__doPostBack` para
+> paginar), `DOMParser` (grilla `grdId` + `__VIEWSTATE`), y por archivo replica el POST "Ver Anexo" (sin
+> captcha) guardando con ruta `Licitacion_<código>/<proveedor>/<archivo>` vía el atributo `download`
+> (Chromium crea las subcarpetas). El código de licitación se extrae del `onclick` `ver_declaracion('rut','CÓDIGO')`.
+>
+> **Verificado:** descargó 30 archivos (5 páginas × 6) de una oferta en `Licitacion_<código>/<proveedor>/`.
+>
+> **Reutilizar:** guardarlo como **Snippet** de DevTools (Sources → Snippets → New) y ejecutarlo con la
+> consola en el contexto del frame de la grilla. (Un bookmarklet NO sirve: corre en el top, que no alcanza la grilla.)
+> Los archivos `licitaciones_download.js` (extensión) y `voucher_content.js` quedan como respaldo por si Edge
+> deja de bloquear la inyección.
 
 ---
 

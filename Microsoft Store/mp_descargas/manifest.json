@@ -21,7 +21,8 @@
         "content.js",
         "highlight_offers.js",
         "bulk_editor.js",
-        "voucher_content.js"
+        "voucher_content.js",
+        "licitaciones_download.js"
       ],
       "run_at": "document_end",
       "all_frames": true
@@ -38,8 +39,7 @@
     }
   ],
   "permissions": [
-    "downloads",
-    "scripting"
+    "downloads"
   ],
   "host_permissions": [
     "https://*.mercadopublico.cl/*"

@@ -1,5 +1,21 @@
 import { initVoucherHandler } from './voucher_background.js';
 
+// Reporte de escaneo del módulo de descarga de Licitaciones (licitaciones_download.js):
+// cada frame reporta periódicamente dónde corre y cuántos botones/grilla ve. Así vemos
+// desde un solo lugar (Service Worker) en qué frames se inyecta el content script y si
+// alguno contiene la grilla grdSupplies de Licitaciones.
+chrome.runtime.onMessage.addListener((request, sender) => {
+    if (request.action === 'licitacionesScanReport' || request.action === 'licitacionesBootReport') {
+        const tab = (sender && sender.tab && sender.tab.id) || '?';
+        const frameId = (sender && sender.frameId != null) ? sender.frameId : 'top';
+        const url = request.url || request.frame || '';
+        const comp = request.comprobante != null ? request.comprobante : (request.found != null ? request.found : '?');
+        const grids = request.grids != null ? request.grids : '?';
+        const top = request.isTop ? 'TOP' : 'iframe';
+        console.log(`[Licitaciones DL] scan — tab ${tab} frameId ${frameId} (${top}) | ${url} | comprobante:${comp} grdSupplies:${grids}`);
+    }
+});
+
 const CONFIG = {
     api: {
         offerDetailsUrl: 'https://servicios-compra-agil.mercadopublico.cl/v1/compra-agil/solicitud/cotizacion/',
@@ -120,47 +136,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Módulo Licitaciones (Voucher View): registra su propio listener para 'downloadVoucherFiles'.
 initVoucherHandler();
 
-// =========================================================================
-// Inyección PROGRAMÁTICA del módulo voucher en ventanas/popups de voucherview.aspx.
-// Respaldo necesario: en Edge/Chrome MV3, los content_scripts del manifest a veces
-// NO se inyectan en popups abiertos con window.open, aunque la URL coincida con el
-// match. Esto garantiza la inyección y, si falla, deja el error exacto en el log
-// del Service Worker (chrome://extensions → "Service worker" → Inspect).
-// =========================================================================
-const VOUCHER_URL_RE = /\/bid\/modules\/bid\/voucherview\.aspx(\?|$)/i;
-
-// Inyecta el módulo voucher en el frame principal de la pestaña/ventana indicada.
-// Reintenta una vez tras pausa para descartar que sea una condición transitoria
-// (popup redirigiéndose / documento recargándose).
-function injectVoucher(tabId, url, attempt) {
-    chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['voucher_content.js']
-    }).then(() => {
-        console.log(`[Voucher BG] Inyección OK en tab ${tabId} (top frame${attempt > 1 ? `, intento ${attempt}` : ''}). url=${url}`);
-    }).catch((err) => {
-        console.warn(`[Voucher BG] Inyección falló (tab ${tabId}, intento ${attempt}). url=${url} →`, err && err.message);
-        if (attempt < 2) {
-            setTimeout(() => injectVoucher(tabId, url, attempt + 1), 1500);
-        } else {
-            console.error(
-                `[Voucher BG] Inyección BLOQUEADA de forma definitiva en tab ${tabId}. url=${url}\n` +
-                'Posibles causas y acciones:\n' +
-                ' • La ventana emergente es STALE (abierta antes de recargar la extensión): ciérrala, recarga la extensión y vuelve a abrirla.\n' +
-                ' • Edge no concede acceso al sitio: en la ventana emergente pulsa el icono de MP Tools → "Permitir en este sitio".\n' +
-                ' • Si persiste, Edge bloquea la inyección en popups de este sitio y habrá que migrar la descarga a la página principal.'
-            );
-        }
-    });
-}
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status !== 'complete') return;
-    const url = (tab && tab.url) ? tab.url : '';
-    if (!VOUCHER_URL_RE.test(url)) return;
-
-    console.log(`[Voucher BG] onUpdated(complete) tab ${tabId} window ${tab && tab.windowId} incognito=${tab && tab.incognito}. url=${url}`);
-    injectVoucher(tabId, url, 1);
-});
-
-console.log('[Voucher BG] Listener de inyección programática registrado (tabs.onUpdated).');
+// NOTA: La inyección programática en el popup del voucher se ELIMINÓ. Se confirmó
+// que Edge bloquea la inyección en la ventana emergente chromeless. La descarga
+// masiva de Licitaciones se realiza desde la PÁGINA PRINCIPAL mediante
+// licitaciones_download.js (content script del manifest: obtiene el voucher por
+// `enc` con fetch y reutiliza el handler 'downloadVoucherFiles').
+// El permiso `scripting` y la inyección programática en www.mercadopublico.cl se
+// quitaron porque Edge los bloquea ("Blocked") y además dejaban la extensión en
+// estado "permisos pendientes" que inutilizaba el toggle por sitio.
+console.log('[Voucher BG] Handler activo (downloadVoucherFiles). Sin inyección programática.');
