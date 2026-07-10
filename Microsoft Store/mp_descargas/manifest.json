@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MP Tools - Mercado Público (Compra Ágil)",
-  "version": "4.2.0",
-  "description": "Descarga masiva, carga masiva desde Excel, exportación de ofertas y resaltado de presupuestos para Mercado Público (Compra Ágil).",
+  "version": "4.3.0",
+  "description": "Descarga masiva, carga masiva desde Excel, exportación de ofertas y resaltado de presupuestos para Mercado Público (Compra Ágil). Incluye descarga masiva de adjuntos en Licitaciones (Voucher View).",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
@@ -20,7 +20,8 @@
       "js": [
         "content.js",
         "highlight_offers.js",
-        "bulk_editor.js"
+        "bulk_editor.js",
+        "voucher_content.js"
       ],
       "run_at": "document_end",
       "all_frames": true
@@ -37,7 +38,8 @@
     }
   ],
   "permissions": [
-    "downloads"
+    "downloads",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.mercadopublico.cl/*"

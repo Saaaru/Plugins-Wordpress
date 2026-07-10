@@ -1,3 +1,5 @@
+import { initVoucherHandler } from './voucher_background.js';
+
 const CONFIG = {
     api: {
         offerDetailsUrl: 'https://servicios-compra-agil.mercadopublico.cl/v1/compra-agil/solicitud/cotizacion/',
@@ -114,3 +116,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 });
+
+// Módulo Licitaciones (Voucher View): registra su propio listener para 'downloadVoucherFiles'.
+initVoucherHandler();
+
+// =========================================================================
+// Inyección PROGRAMÁTICA del módulo voucher en ventanas/popups de voucherview.aspx.
+// Respaldo necesario: en Edge/Chrome MV3, los content_scripts del manifest a veces
+// NO se inyectan en popups abiertos con window.open, aunque la URL coincida con el
+// match. Esto garantiza la inyección y, si falla, deja el error exacto en el log
+// del Service Worker (chrome://extensions → "Service worker" → Inspect).
+// =========================================================================
+const VOUCHER_URL_RE = /\/bid\/modules\/bid\/voucherview\.aspx(\?|$)/i;
+
+// Inyecta el módulo voucher en el frame principal de la pestaña/ventana indicada.
+// Reintenta una vez tras pausa para descartar que sea una condición transitoria
+// (popup redirigiéndose / documento recargándose).
+function injectVoucher(tabId, url, attempt) {
+    chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['voucher_content.js']
+    }).then(() => {
+        console.log(`[Voucher BG] Inyección OK en tab ${tabId} (top frame${attempt > 1 ? `, intento ${attempt}` : ''}). url=${url}`);
+    }).catch((err) => {
+        console.warn(`[Voucher BG] Inyección falló (tab ${tabId}, intento ${attempt}). url=${url} →`, err && err.message);
+        if (attempt < 2) {
+            setTimeout(() => injectVoucher(tabId, url, attempt + 1), 1500);
+        } else {
+            console.error(
+                `[Voucher BG] Inyección BLOQUEADA de forma definitiva en tab ${tabId}. url=${url}\n` +
+                'Posibles causas y acciones:\n' +
+                ' • La ventana emergente es STALE (abierta antes de recargar la extensión): ciérrala, recarga la extensión y vuelve a abrirla.\n' +
+                ' • Edge no concede acceso al sitio: en la ventana emergente pulsa el icono de MP Tools → "Permitir en este sitio".\n' +
+                ' • Si persiste, Edge bloquea la inyección en popups de este sitio y habrá que migrar la descarga a la página principal.'
+            );
+        }
+    });
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'complete') return;
+    const url = (tab && tab.url) ? tab.url : '';
+    if (!VOUCHER_URL_RE.test(url)) return;
+
+    console.log(`[Voucher BG] onUpdated(complete) tab ${tabId} window ${tab && tab.windowId} incognito=${tab && tab.incognito}. url=${url}`);
+    injectVoucher(tabId, url, 1);
+});
+
+console.log('[Voucher BG] Listener de inyección programática registrado (tabs.onUpdated).');
