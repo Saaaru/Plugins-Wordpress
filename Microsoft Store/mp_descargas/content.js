@@ -93,7 +93,7 @@
         }, 2000);
     }
 
-    function showCompletionModal() {
+    function showCompletionModal(totalDownloaded) {
         const overlay = document.createElement('div');
         Object.assign(overlay.style, {
             position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
@@ -119,7 +119,11 @@
         title.style.color = '#333';
 
         const text = document.createElement('p');
-        text.textContent = 'Revisa tu carpeta de "Descargas" local para encontrar las ofertas organizadas en sus respectivas subcarpetas.';
+        if (totalDownloaded != null) {
+            text.textContent = `Se descargaron ${totalDownloaded} archivo(s) correctamente. Revisa tu carpeta de "Descargas" local para encontrar las ofertas organizadas en sus respectivas subcarpetas.`;
+        } else {
+            text.textContent = 'Revisa tu carpeta de "Descargas" local para encontrar las ofertas organizadas en sus respectivas subcarpetas.';
+        }
         text.style.color = '#666';
         text.style.lineHeight = '1.5';
         text.style.marginBottom = '20px';
@@ -206,7 +210,7 @@
             button.textContent = CONFIG.texts.buttonDone;
 
             if (response && response.success) {
-                showCompletionModal();
+                showCompletionModal(response.totalDownloaded);
             }
 
             setTimeout(() => {
@@ -225,7 +229,7 @@
             if (!fichaAnchor) continue; // Not an offer card
 
             const razonSocial = fichaAnchor.textContent.trim();
-            
+
             // Find RUT
             let rut = '';
             const rutMatch = card.innerHTML.match(/\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b/);
@@ -252,10 +256,10 @@
             const paragraphs = Array.from(card.querySelectorAll('p'));
             const descEl = paragraphs.find(p => {
                 const text = p.textContent.trim();
-                return text && 
-                       !text.match(/\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b/) && 
-                       text !== 'Monto total' && 
-                       !text.includes('Recibiste');
+                return text &&
+                    !text.match(/\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b/) &&
+                    text !== 'Monto total' &&
+                    !text.includes('Recibiste');
             });
             if (descEl) {
                 description = descEl.textContent.trim();
@@ -296,17 +300,48 @@
         const csvContent = "\ufeff" + csvRows.join("\r\n");
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        
+
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        
+
         const quotaCode = extractQuotationCode() || 'exportacion';
         link.setAttribute("download", `Ofertas_${quotaCode}.csv`);
         link.style.visibility = 'hidden';
-        
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    function injectDownloadButton() {
+        if (document.getElementById(CONFIG.ids.downloadButton)) return;
+
+        // Buscar el título "Adjuntos de la cotización"
+        const paragraphs = Array.from(document.querySelectorAll(CONFIG.selectors.attachmentTitle));
+        const targetEl = paragraphs.find(p => p.textContent.includes(CONFIG.texts.attachmentTitleText));
+
+        if (!targetEl) return;
+
+        const button = document.createElement('button');
+        button.id = CONFIG.ids.downloadButton;
+        button.textContent = CONFIG.texts.buttonInitial;
+        Object.assign(button.style, {
+            marginLeft: '15px',
+            padding: '6px 12px',
+            backgroundColor: '#00549f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 'normal',
+            display: 'inline-block',
+            textAlign: 'center',
+            verticalAlign: 'middle'
+        });
+        button.onclick = handleBulkDownload;
+
+        targetEl.insertAdjacentElement('afterend', button);
     }
 
     function injectDownloadAllButton() {
@@ -375,6 +410,16 @@
         } else if (event.data.type === 'MP_ALL_OFFERS_FROM_PAGE') {
             allOffersData = event.data.payload;
             setTimeout(injectDownloadAllButton, 500);
+        }
+    });
+
+    // Escucha mensajes de progreso enviados por el background script durante la descarga masiva
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'downloadProgress') {
+            const button = document.getElementById(CONFIG.ids.downloadAllButton);
+            if (button) {
+                button.textContent = `⏳ Descargando oferta ${request.currentOffer}/${request.totalOffers} (${request.filesDownloaded} archivos)...`;
+            }
         }
     });
 })();

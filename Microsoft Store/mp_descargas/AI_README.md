@@ -86,10 +86,13 @@ sequenceDiagram
     *   **Button Injections:**
         *   Injects `📥 Descargar todo` (Individual offer attachments) by scraping for elements containing "Adjuntos de la cotización".
         *   Injects `📥 Descargar todas las ofertas` (Global bulk download button) adjacent to the calling phase indicator span (containing the word "Llamado").
+        *   Injects `📊 Exportar tabla a Excel` (CSV export button) next to the bulk download button.
     *   **Download Filtering & Dispatching:**
         *   **Local Action:** Performs direct authenticated fetch and blob creation for individual offers.
         *   **Bulk Action:** Filters out any offer whose UI card contains the text element `INADMISIBLE`.
         *   Sends the sanitized, clean list of target offer JSON items + the authorization bearer token to the background service worker using `chrome.runtime.sendMessage`.
+    *   **Progress Listener:** Listens for `downloadProgress` messages from the background worker and updates the bulk-download button text in real time (`⏳ Descargando oferta X/Y (N archivos)...`).
+    *   **Offer Data Export (`handleExportOffersExcel`):** Scrapes every `.MuiPaper-root` offer card (identified by the presence of an `a[href*="proveedor.mercadopublico.cl/ficha"]` anchor), extracts provider name, RUT (regex `\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b`), vigencia, total price (`h3` containing `$`), description, and inadmissibility status, then generates a semicolon-delimited CSV with a UTF-8 BOM (`\ufeff`) and triggers a download named `Ofertas_{QuotaCode}.csv`.
 
 ---
 
@@ -97,13 +100,15 @@ sequenceDiagram
 *   **Role:** Operates as a persistent service worker capable of running complex fetch lists outside the scope of individual page lifecycles.
 *   **Context:** **Extension Service Worker**.
 *   **Key Operations & Implementation:**
-    *   **Message Listener:** Listens for `downloadAllOffers` action.
+    *   **Message Listener:** Listens for `downloadAllOffers` action. Forwards the `sender` object (containing the originating tab ID) into the download handler so progress can be reported back.
     *   **File Resolution Loop (`handleAllOffersDownload`):**
         1. Iterates over the raw list of filtered offers.
-        2. Queries the Mercado Público API `.../solicitud/cotizacion/{ofertaId}` to resolve the actual database file attachments (`documentosAdjuntos`).
-        3. For each file ID, issues an authenticated request to download the raw binary blob.
-        4. Converts the blob to a base64 Data URL via a `FileReader` reader interface.
-        5. Triggers `chrome.downloads.download` using the base64 payload.
+        2. Before processing each offer, sends a `downloadProgress` message to the sender tab (`chrome.tabs.sendMessage`) with the current offer index, total offers, and running file count.
+        3. Queries the Mercado Público API `.../solicitud/cotizacion/{ofertaId}` to resolve the actual database file attachments (`documentosAdjuntos`).
+        4. For each file ID, issues an authenticated request to download the raw binary blob.
+        5. Converts the blob to a base64 Data URL via a `FileReader` reader interface.
+        6. Triggers `chrome.downloads.download` using the base64 payload.
+        7. Resolves the promise with the total count of downloaded files, which is relayed back to the content script in the response payload.
     *   **Rate Limiting & Safety:** Implements a strict `500ms` promise delay between consecutive file downloads to prevent browser bottlenecks and avoid rate-limiting triggers.
     *   **Filename Sanitization:** Recursively replaces unsafe operating system naming characters (e.g. `< > : " / \ | ? * \x00-\x1F`) with underscores (`_`) using:
         ```javascript
@@ -204,6 +209,19 @@ Here are the precise message payloads used for internal communication:
     }
     ```
 
+### 3. Background Worker to Content Script (Progress Updates)
+*   **Method:** `chrome.tabs.sendMessage(senderTabId, payload)`
+*   **Type:** `downloadProgress`
+    ```json
+    {
+      "action": "downloadProgress",
+      "currentOffer": 3,
+      "totalOffers": 10,
+      "filesDownloaded": 12
+    }
+    ```
+*   **Response (on completion):** The `downloadAllOffers` callback receives `{ "success": true, "totalDownloaded": 47 }`, which the content script uses to populate the completion modal.
+
 ---
 
 ## 🎯 Selector Reference Sheet
@@ -215,3 +233,7 @@ Keep these standard Material UI selector hooks in mind when reading or editing t
 *   **Combo Triggers:** `[role="combobox"]` or `input[type="radio"][value="2"]` for budget rejection.
 *   **MUI Dropdown Option Items:** `li[role="option"]` and `.MuiPopover-root div[aria-hidden="true"]` (backdrop).
 *   **Quotation IDs:** Extracted from the main `<h2>` using the regex: `/\d+-\d+-[A-Z0-9]+/`.
+*   **Offer Card Identification (Export):** `a[href*="proveedor.mercadopublico.cl/ficha"]` anchors distinguish offer cards from other `.MuiPaper-root` elements.
+*   **Provider RUT (Export):** Matched via regex `\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b` against the card's `innerHTML`.
+*   **Offer Price (Export):** The `h3` element containing a `$` symbol within an offer card.
+*   **Inadmissibility Status (Export/Filter):** Any `span`, `div`, or `p` whose trimmed `textContent` equals exactly `INADMISIBLE`.

@@ -43,12 +43,24 @@ async function downloadFileAsBase64(fileId, token) {
     });
 }
 
-async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPublico_Ofertas') {
+async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPublico_Ofertas', sender) {
     let totalDownloaded = 0;
+    const totalOffers = ofertas.length;
 
-    for (const oferta of ofertas) {
+    for (let i = 0; i < ofertas.length; i++) {
+        const oferta = ofertas[i];
         const providerName = sanitizeFilename(oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`);
         console.log(`[Descarga Masiva] Fetching attachments for: ${providerName}...`);
+
+        // Reportar progreso al content script de la pestaña emisora
+        if (sender && sender.tab && sender.tab.id) {
+            chrome.tabs.sendMessage(sender.tab.id, {
+                action: 'downloadProgress',
+                currentOffer: i + 1,
+                totalOffers: totalOffers,
+                filesDownloaded: totalDownloaded
+            }).catch(() => { /* La pestaña pudo haberse cerrado; ignorar */ });
+        }
 
         const attachs = await fetchOfferDetails(oferta.id, token);
 
@@ -57,8 +69,10 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
                 const base64Data = await downloadFileAsBase64(file.id, token);
                 const safeFileName = sanitizeFilename(file.filename);
                 // The filename property will dictate the relative path inside the user's Downloads folder
-                // e.g. "2284-145-COT26/ProveedorName/filename.pdf"
-                const relativePath = `${rootFolder}/${providerName}/${safeFileName}`;
+                // e.g. "2284-145-COT26/1.- ProveedorName/filename.pdf"
+                // El prefijo numerado (i+1) preserva el orden en que aparecen las ofertas en la tabla del portal.
+                const folderNumber = i + 1;
+                const relativePath = `${rootFolder}/${folderNumber}.- ${providerName}/${safeFileName}`;
 
                 await new Promise((resolve) => {
                     chrome.downloads.download({
@@ -81,6 +95,7 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
     }
 
     console.log(`[Descarga Masiva] Finalizado. Se descargaron ${totalDownloaded} archivos.`);
+    return totalDownloaded;
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -88,8 +103,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[Descarga Masiva] Iniciando descarga masiva...', request.ofertas.length, 'ofertas');
 
         // Ejecutar proceso asíncrono
-        handleAllOffersDownload(request.ofertas, request.token, request.rootFolder)
-            .then(() => sendResponse({ success: true }))
+        handleAllOffersDownload(request.ofertas, request.token, request.rootFolder, sender)
+            .then((totalDownloaded) => sendResponse({ success: true, totalDownloaded }))
             .catch((err) => {
                 console.error(err);
                 sendResponse({ success: false, error: err.message });

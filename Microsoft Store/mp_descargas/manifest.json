@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Descarga Masiva de Adjuntos - Mercado Público",
-  "version": "4.1.1",
-  "description": "Herramientas de automatización de descarga y gestión para Mercado Público (Compra Ágil).",
+  "name": "MP Tools - Mercado Público (Compra Ágil)",
+  "version": "4.2.0",
+  "description": "Descarga masiva, carga masiva desde Excel, exportación de ofertas y resaltado de presupuestos para Mercado Público (Compra Ágil).",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
