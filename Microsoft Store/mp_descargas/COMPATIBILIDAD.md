@@ -1,6 +1,6 @@
 # 🌐 Revisión de Compatibilidad — Chrome vs Edge
 
-**Extensión:** MP Tools para Mercado Público · **Versión:** 4.3.5 · **Manifest:** V3
+**Extensión:** MP Tools para Mercado Público · **Versión:** 4.4.0 · **Manifest:** V3
 
 ## ✅ Veredicto
 
@@ -50,7 +50,7 @@ Antes de cada release, ejecuta este checklist mínimo en **ambos** navegadores:
 
 - [ ] Cargar la extensión descomprimida en Chrome y en Edge.
 - [ ] Abrir una cotización de Compra Ágil: verificar botones `📥 Descargar todo`, `📥 Descargar todas las ofertas` y `📊 Exportar tabla a Excel`.
-- [ ] Abrir una Licitación: usar el popup `🔄 Inyectar botones de descarga` y descargar adjuntos de un comprobante.
+- [ ] Abrir una Licitación: verificar que los botones `📥` se inyectan automáticamente y descargar adjuntos de un comprobante.
 - [ ] Verificar el resaltado de presupuesto y el botón `🤖 Auto-Rechazar`.
 - [ ] Probar la carga masiva desde Excel.
 - [ ] Confirmar que no hay errores en la consola del Service Worker ni de los content scripts.

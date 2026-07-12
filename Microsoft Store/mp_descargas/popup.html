@@ -11,7 +11,7 @@
         body {
             width: 340px;
             margin: 0;
-            padding: 16px;
+            padding: 18px;
             font-family: 'Segoe UI', Tahoma, sans-serif;
             font-size: 13px;
             color: #333;
@@ -32,98 +32,56 @@
             margin: 0 0 14px 0;
         }
 
-        button {
-            width: 100%;
-            padding: 11px;
+        .info {
+            background: #f0f7ff;
+            border: 1px solid #d6e8ff;
+            border-radius: 6px;
+            padding: 11px 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #444;
+        }
+
+        .info strong {
+            color: #00549f;
+        }
+
+        .info code {
+            background: #e3eefb;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .thanks {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.55;
+            color: #666;
+        }
+
+        .thanks .heart {
+            font-size: 14px;
+        }
+
+        .thanks a {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 9px 16px;
             background: #00549f;
             color: #fff;
-            border: none;
+            text-decoration: none;
             border-radius: 6px;
-            font-size: 13px;
             font-weight: 600;
-            cursor: pointer;
+            font-size: 12px;
             transition: background 0.2s;
         }
 
-        button:hover:not(:disabled) {
+        .thanks a:hover {
             background: #0072ce;
-        }
-
-        button:disabled {
-            background: #aaa;
-            cursor: default;
-        }
-
-        .status {
-            margin-top: 10px;
-            padding: 9px 11px;
-            border-radius: 5px;
-            font-size: 12px;
-            line-height: 1.45;
-            display: none;
-        }
-
-        .status.loading {
-            background: #e7f3ff;
-            color: #00549f;
-            display: block;
-        }
-
-        .status.success {
-            background: #e8f5e9;
-            color: #2e7d32;
-            display: block;
-        }
-
-        .status.warning {
-            background: #fff8e1;
-            color: #e65100;
-            display: block;
-        }
-
-        .status.error {
-            background: #ffebee;
-            color: #c62828;
-            display: block;
-        }
-
-        .hint {
-            margin-top: 12px;
-            font-size: 11px;
-            color: #aaa;
-            line-height: 1.5;
-        }
-
-        .tab-bar {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 14px;
-        }
-
-        .tab {
-            flex: 1;
-            text-align: center;
-            padding: 7px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 5px 5px 0 0;
-            border-bottom: 2px solid transparent;
-            color: #999;
-        }
-
-        .tab.active {
-            color: #00549f;
-            border-bottom-color: #00549f;
-            background: #f0f7ff;
-        }
-
-        .panel {
-            display: none;
-        }
-
-        .panel.active {
-            display: block;
         }
     </style>
 </head>
@@ -132,16 +90,17 @@
     <h1>🛠️ MP Tools</h1>
     <p class="subtitle">Descarga masiva — Licitaciones (Comprobante de oferta)</p>
 
-    <button id="injectBtn">🔄 Inyectar botones de descarga</button>
-    <div id="status" class="status"></div>
-    <p class="hint">
-        <strong>Pasos:</strong><br>
-        1. Abre el <em>Resumen de ofertas</em> en Mercado Público.<br>
-        2. Pulsa el botón de arriba.<br>
-        3. Aparecerá 📥 junto a cada oferta.<br>
-        4. Pulsa 📥 para descargar <strong>todos</strong> los adjuntos (todas las páginas)
-        en <code>Descargas/Licitacion_<código>/<proveedor>/</code>.
-    </p>
+    <div class="info">
+        Pulsa 📥 junto a cada oferta para descargar <strong>todos</strong> sus adjuntos en
+        <code>Descargas/Licitacion_<código>/<proveedor>/</code>.
+    </div>
+
+    <div class="thanks">
+        <p><span class="heart">🙏</span> ¡Gracias por usar MP Tools!</p>
+        <p>Si necesitas más servicios como este, búscanos en</p>
+        <a href="https://www.solvitu.com" id="solvituLink">www.solvitu.com</a>
+    </div>
+
     <script src="popup.js"></script>
 </body>
 

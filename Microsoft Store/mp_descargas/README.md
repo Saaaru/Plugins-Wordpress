@@ -1,4 +1,4 @@
-# 📥 MP Tools para Mercado Público (Compra Ágil) v4.3.5
+# 📥 MP Tools para Mercado Público (Compra Ágil) v4.4.0
 
 Una potente y sofisticada extensión de **Chrome / Edge** diseñada para optimizar, automatizar y agilizar tareas críticas dentro del portal de [Mercado Público](https://www.mercadopublico.cl/), específicamente en el módulo de **Compra Ágil** y ahora también en el portal legacy de **Licitaciones (Voucher View)**. Esta herramienta agrupa cinco funcionalidades clave en una única solución integrada que ahorra horas de trabajo manual.
 
@@ -154,9 +154,8 @@ Basta con buscar **"MP Tools Mercado Público"** en la tienda de extensiones de 
 
 ### 🏛️ Descarga Masiva en Licitaciones (Voucher View)
 1. Abre el **Resumen de ofertas** de una Licitación en Mercado Público.
-2. Haz clic en el ícono de la extensión (toolbar) y presiona **`🔄 Inyectar botones de descarga`**.
-3. Aparecerá un botón `📥` junto a cada oferta de la grilla `grdSupplies`.
-4. Pulsa `📥` en la oferta deseada para descargar **todos** sus adjuntos (todas las páginas) en `Descargas/Licitacion_<código>/<proveedor>/`.
+2. Aparecerá automáticamente un botón `📥` junto a cada oferta de la grilla `grdSupplies` (la inyección es automática, no requiere acción del usuario).
+3. Pulsa `📥` en la oferta deseada para descargar **todos** sus adjuntos (todas las páginas) en `Descargas/Licitacion_<código>/<proveedor>/`.
 
 ---
 
@@ -182,6 +181,11 @@ La extensión está construida sobre **Manifest V3** y utiliza únicamente APIs 
 ---
 
 ## 📝 Registro de Cambios (Changelog)
+
+### v4.4.0
+* ✨ **Mejora de UX**: Los botones de descarga de Licitaciones ahora se inyectan **automáticamente** (vía `content_scripts` del manifest con `all_frames:true`), por lo que ya no es necesario pulsar un botón manual en el popup.
+* 🎨 **Popup rediseñado**: Se elimina el botón "Inyectar botones de descarga" y se reemplaza por un mensaje de agradecimiento con enlace a [www.solvitu.com](https://www.solvitu.com).
+* 🧹 **Limpieza**: Simplificación del controlador del popup (`popup.js`).
 
 ### v4.3.5
 * ✨ **Nuevo módulo**: Descarga masiva de adjuntos para **Licitaciones (Voucher View)** mediante replica del POST "Ver Anexo" (captcha-free) y paginación automática con reanudación vía `sessionStorage`.

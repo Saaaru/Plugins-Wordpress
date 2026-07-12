@@ -2,7 +2,7 @@
 
 > **Una sola extensión para gobernar Mercado Público.** Descarga, carga, analiza y exporta ofertas en segundos — no en horas.
 
-**Versión:** 4.3.5 · **Plataformas:** Google Chrome & Microsoft Edge · **Manifest V3**
+**Versión:** 4.4.0 · **Plataformas:** Google Chrome & Microsoft Edge · **Manifest V3**
 
 ---
 
