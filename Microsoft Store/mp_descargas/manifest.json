@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MP Tools - Mercado Público (Compra Ágil)",
   "version": "4.4.0",
-  "description": "Descarga masiva, carga masiva desde Excel, exportación de ofertas y resaltado de presupuestos para Mercado Público (Compra Ágil). Incluye descarga masiva de adjuntos en Licitaciones (Voucher View).",
+  "description": "Descarga masiva de Compra Ágil y Licitaciones. Incluye carga masiva desde Excel.  ",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
