@@ -141,7 +141,13 @@
             return await r.text();
         }
         const params = new URLSearchParams();
-        for (const [k, v] of Object.entries(prevFormState)) params.append(k, v);
+        // CRÍTICO: prevFormState ya incluye __EVENTTARGET/__EVENTARGUMENT (hidden fields
+        // vacíos). Con append() se duplicaban y ASP.NET leía el primer valor (vacío) →
+        // nunca avanzaba de página. Se eliminan antes del loop y se añaden una sola vez.
+        const state = { ...prevFormState };
+        delete state.__EVENTTARGET;
+        delete state.__EVENTARGUMENT;
+        for (const [k, v] of Object.entries(state)) params.append(k, v);
         params.append('__EVENTTARGET', GRID_UNIQUE_ID);
         params.append('__EVENTARGUMENT', `Page$${page}`);
         const r = await fetch(url, {

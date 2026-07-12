@@ -3,6 +3,14 @@
 (function () {
     'use strict';
 
+    // FIX (Issue 1): The "Carga Masiva" button uses position:fixed and was
+    // appearing in EVERY iframe (OpeningHeader, SupplySummary, etc.) on
+    // licitaciones pages. Instead of blocking all iframes (which would also
+    // block the Compra Ágil app if it's embedded in an iframe), we check
+    // for Compra Ágil-specific DOM elements (.MuiPaper-root with input[type=number]
+    // and [role=combobox]) before creating the button. This way:
+    //   - Compra Ágil pages (top or iframe): button appears ✓
+    //   - Licitaciones iframes (no React UI): no button ✓
     console.log(">>> Carga Masiva (v5 - Descarga Directa) cargado.");
 
     // --- 1. UTILIDADES ---
@@ -24,15 +32,15 @@
     // Escribe en inputs de React
     function setReactInputValue(element, value) {
         if (!element) return;
-        
+
         const lastValue = element.value;
         element.value = value;
-        
+
         const tracker = element._valueTracker;
         if (tracker) {
             tracker.setValue(lastValue);
         }
-        
+
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
         element.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -48,18 +56,18 @@
         if (!trigger) return;
 
         trigger.scrollIntoView({ behavior: 'auto', block: 'center' });
-        
+
         simulateMouseClick(trigger);
-        await delay(800); 
+        await delay(800);
 
         const options = document.querySelectorAll('li[role="option"]');
         const search = textToFind.trim().toUpperCase();
-        
+
         let found = null;
         for (const op of options) {
             const opText = op.textContent || "";
-            const titleText = op.querySelector('div')?.getAttribute('title') || ""; 
-            
+            const titleText = op.querySelector('div')?.getAttribute('title') || "";
+
             if (opText.toUpperCase() === search || titleText.toUpperCase() === search) {
                 found = op;
                 break;
@@ -71,12 +79,12 @@
             console.log(`✅ [Unidad] Click real en: ${textToFind}`);
         } else {
             console.warn(`⚠️ [Unidad] No encontrada: ${textToFind}`);
-            const backdrop = document.querySelector('.MuiPopover-root div[aria-hidden="true"]'); 
+            const backdrop = document.querySelector('.MuiPopover-root div[aria-hidden="true"]');
             if (backdrop) simulateMouseClick(backdrop);
             else document.body.click();
         }
 
-        await delay(400); 
+        await delay(400);
     }
 
 
@@ -84,7 +92,7 @@
 
     async function processBulkData(textData) {
         const lines = textData.trim().split('\n');
-        
+
         const productCards = Array.from(document.querySelectorAll('.MuiPaper-root')).filter(card => {
             return card.querySelector('input[type="number"]') && card.querySelector('[role="combobox"]');
         });
@@ -104,12 +112,12 @@
             const line = lines[i].trim();
             if (!line) continue;
 
-            let parts = line.split(/\t/); 
+            let parts = line.split(/\t/);
             if (parts.length < 2 && line.includes(';')) parts = line.split(';');
 
             const cantidad = parts[0]?.trim();
             const unidad = parts[1]?.trim();
-            const detalle = parts[2]?.trim(); 
+            const detalle = parts[2]?.trim();
 
             const card = productCards[i];
 
@@ -132,7 +140,7 @@
             if (unidad) {
                 await selectMuiDropdown(card, unidad);
             }
-            
+
             processedCount++;
         }
 
@@ -142,8 +150,27 @@
 
     // --- 3. INTERFAZ GRÁFICA ---
 
+    // FIX (Issue 1): Only create the button on Compra Ágil pages (React UI).
+    // The Compra Ágil app has .MuiPaper-root cards with input[type="number"]
+    // and [role="combobox"] (Material UI dropdowns). Licitaciones iframes
+    // (ASP.NET legacy) don't have these elements, so the button won't appear.
+    function isCompraAgilPage() {
+        return document.querySelector('.MuiPaper-root') !== null;
+    }
+
+    let __createRetries = 0;
     function createUI() {
         if (document.getElementById('mp-bulk-btn')) return;
+
+        // Only show on Compra Ágil pages. Retry if the React UI hasn't
+        // loaded yet (it may still be rendering after document_end).
+        if (!isCompraAgilPage()) {
+            if (__createRetries < 10) {
+                __createRetries++;
+                setTimeout(createUI, 1500);
+            }
+            return;
+        }
 
         const btn = document.createElement('button');
         btn.id = 'mp-bulk-btn';
@@ -155,7 +182,7 @@
             cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
             transition: 'all 0.3s ease'
         });
-        
+
         btn.onmouseover = () => btn.style.transform = "scale(1.05)";
         btn.onmouseout = () => btn.style.transform = "scale(1)";
 
@@ -169,17 +196,17 @@
         const overlay = document.createElement('div');
         overlay.id = 'mp-bulk-modal';
         Object.assign(overlay.style, {
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            width: '100%', 
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
             height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.6)', 
-            zIndex: '10000', 
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            zIndex: '10000',
             backdropFilter: 'blur(2px)',
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'flex-start', 
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
             paddingTop: '100px'
         });
 

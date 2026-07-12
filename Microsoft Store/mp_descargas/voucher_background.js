@@ -15,7 +15,13 @@
 
 function sanitizeFilename(name) {
     if (!name) return 'Desconocido';
-    return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, ' ').trim() || 'Desconocido';
+    return name
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^\.+/, '')   // Windows rejects folder names starting with "."
+        .replace(/\.+$/, '')   // or ending with "."
+        || 'Desconocido';
 }
 
 function blobToBase64(blob) {
@@ -30,7 +36,11 @@ function blobToBase64(blob) {
 // POST que reproduce el clic en "Ver Anexo" de una fila concreta.
 async function downloadVoucherFile(formState, enc, buttonName, filename, rootFolder) {
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(formState)) {
+    // Evita claves duplicadas: formState ya trae __EVENTTARGET/__EVENTARGUMENT vacíos.
+    const state = { ...formState };
+    delete state.__EVENTTARGET;
+    delete state.__EVENTARGUMENT;
+    for (const [key, value] of Object.entries(state)) {
         params.append(key, value);
     }
     params.append('__EVENTTARGET', '');
@@ -59,6 +69,7 @@ async function downloadVoucherFile(formState, enc, buttonName, filename, rootFol
     }
 
     const blob = await response.blob();
+    console.log(`[Voucher] ${filename} — contentType: "${contentType}" | blob size: ${blob.size} bytes`);
     if (!blob || blob.size === 0) {
         console.warn('[Voucher] Blob vacío (se omite):', filename);
         return false;
@@ -68,22 +79,35 @@ async function downloadVoucherFile(formState, enc, buttonName, filename, rootFol
     const safeName = sanitizeFilename(filename);
     const relativePath = `${rootFolder}/${safeName}`;
 
-    await new Promise((resolve) => {
+    const downloadId = await new Promise((resolve) => {
         chrome.downloads.download({
             url: base64,
             filename: relativePath,
             conflictAction: 'uniquify',
             saveAs: false
-        }, () => resolve());
+        }, (id) => {
+            if (chrome.runtime.lastError) {
+                console.error('[Voucher] chrome.downloads.download ERROR:', chrome.runtime.lastError.message, '| path:', relativePath);
+                resolve(null);
+            } else {
+                resolve(id);
+            }
+        });
     });
 
-    console.log('[Voucher] Descargado:', relativePath);
+    if (downloadId === null) {
+        console.error('[Voucher] Descarga FALLIDA:', relativePath);
+        return false;
+    }
+
+    console.log('[Voucher] Descargado (id:' + downloadId + '):', relativePath);
     return true;
 }
 
 // Procesa todos los archivos de una página y reporta progreso a la pestaña origen.
 async function handleVoucherDownload(request, sender) {
     const { formState, enc, files, rootFolder } = request;
+    console.log('[Voucher] handleVoucherDownload — files:', files.length, '| rootFolder:', rootFolder, '| formState keys:', Object.keys(formState).join(','));
     let downloaded = 0;
 
     for (let i = 0; i < files.length; i++) {

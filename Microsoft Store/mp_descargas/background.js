@@ -12,7 +12,12 @@ chrome.runtime.onMessage.addListener((request, sender) => {
         const comp = request.comprobante != null ? request.comprobante : (request.found != null ? request.found : '?');
         const grids = request.grids != null ? request.grids : '?';
         const top = request.isTop ? 'TOP' : 'iframe';
-        console.log(`[Licitaciones DL] scan — tab ${tab} frameId ${frameId} (${top}) | ${url} | comprobante:${comp} grdSupplies:${grids}`);
+        // FIX (Issue 2): Only log when comprobante buttons are found (comp > 0).
+        // Frames like Menu.aspx and Reloj.aspx never find anything and were
+        // flooding the service worker console with "comprobante:0" messages.
+        if (comp && comp !== '?' && parseInt(comp, 10) > 0) {
+            console.log(`[Licitaciones DL] scan — tab ${tab} frameId ${frameId} (${top}) | ${url} | comprobante:${comp} grdSupplies:${grids}`);
+        }
     }
 });
 
@@ -26,7 +31,12 @@ const CONFIG = {
 // Utilities to clean folder names (avoid invalid characters)
 function sanitizeFilename(name) {
     if (!name) return 'Desconocido';
-    return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim();
+    return name
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+        .trim()
+        .replace(/^\.+/, '')
+        .replace(/\.+$/, '')
+        || 'Desconocido';
 }
 
 async function fetchOfferDetails(ofertaId, token) {
@@ -130,6 +140,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Return true indicates we wish to send a response asynchronously
         return true;
+    }
+});
+
+// Handler simple: guarda un blob (base64 data URL) como archivo usando chrome.downloads.download.
+// Usado por licitaciones_download.js cuando el content script hace el POST "Ver Anexo"
+// (same-origin, cookies automáticas) y solo necesita que el background guarde el archivo.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'saveBlobAsFile') {
+        chrome.downloads.download({
+            url: request.base64,
+            filename: request.filename,
+            conflictAction: 'uniquify',
+            saveAs: false
+        }, (downloadId) => {
+            if (chrome.runtime.lastError) {
+                console.error('[BG] saveBlobAsFile ERROR:', chrome.runtime.lastError.message, '| path:', request.filename);
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+                sendResponse({ success: true, downloadId });
+            }
+        });
+        return true; // async
     }
 });
 

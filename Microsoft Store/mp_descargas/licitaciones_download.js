@@ -1,9 +1,12 @@
 /**
  * licitaciones_download.js — Descarga masiva de adjuntos de LICITACIONES.
  *
- * CÓMO SE INYECTA: el manifest NO inyecta content scripts en www.mercadopublico.cl
- * (solo en compra-agil), pese a tener site access. Por eso el background inyecta
- * este archivo PROGRAMÁTICAMENTE en el frame TOP (Menu.aspx) vía chrome.scripting.
+ * CÓMO SE INYECTA (definitivo): el POPUP de la extensión inyecta este archivo en
+ * TODOS los frames del tab activo vía chrome.scripting.executeScript({allFrames:true}),
+ * que usa el árbol interno de frames del navegador (no un walk JS) y por tanto alcanza
+ * la grilla grdSupplies aunque viva en un iframe anidado. También puede inyectarse vía
+ * el manifest (content_scripts, all_frames:true) si Edge lo permite; el guarda
+ * window.__mpLicitacionesDL evita la doble inicialización.
  *
  * CÓMO FUNCIONA: desde el TOP recorre recursivamente los iframes del MISMO origen
  * (www.mercadopublico.cl → www.mercadopublico.cl: OpeningFrame → SupplySummary),
@@ -20,7 +23,8 @@
 (function () {
     'use strict';
 
-    // Anti-doble inyección (manifest en compra-agil + inyección programática).
+    // Anti-doble inyección: seguro contra re-ejecuciones del popup (executeScript)
+    // y contra inyección simultánea del manifest. Cada frame tiene su propio window.
     if (window.__mpLicitacionesDL) return;
     window.__mpLicitacionesDL = true;
 
@@ -37,12 +41,30 @@
 
     function dbg(...args) { console.log(LOG, ...args); }
     function sanitize(name) {
-        return (name || 'documento').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, ' ').trim() || 'documento';
+        return (name || 'documento')
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^\.+/, '')   // Windows rejects folder names starting with "."
+            .replace(/\.+$/, '')   // or ending with "."
+            || 'documento';
     }
-    function getLicitacionCode(doc) {
-        const txt = (doc && doc.body ? doc.body.innerText : '') || '';
-        const m = txt.match(LIC_CODE_RE);
-        return m ? m[0] : 'Licitacion';
+    function getLicitacionCode(docs) {
+        const docList = Array.isArray(docs) ? docs : [docs];
+        // 1. Buscar #Lnk_ExternalCode_Value (elemento <a> con el número de licitación)
+        for (const doc of docList) {
+            const link = doc && doc.querySelector ? doc.querySelector('#Lnk_ExternalCode_Value') : null;
+            if (link && /\d{3,}-\d+-L\d{2,}/.test(link.textContent.trim())) {
+                return link.textContent.trim();
+            }
+        }
+        // 2. Fallback: buscar el patrón en el texto de cualquier doc
+        for (const doc of docList) {
+            const txt = (doc && doc.body ? doc.body.innerText : '') || '';
+            const m = txt.match(LIC_CODE_RE);
+            if (m) return m[0];
+        }
+        return 'Licitacion';
     }
     function extractEncFromButton(btn) {
         const m = (btn.getAttribute('onclick') || '').match(ENC_RE);
@@ -121,23 +143,78 @@
     }
     function parseTotalPages(doc) {
         let max = 1;
+        const found = [];
         doc.querySelectorAll('a[href*="Page$"]').forEach(a => {
             const m = (a.getAttribute('href') || '').match(/Page\$(\d+)/);
-            if (m) max = Math.max(max, parseInt(m[1], 10));
+            if (m) {
+                const n = parseInt(m[1], 10);
+                found.push(n);
+                max = Math.max(max, n);
+            }
         });
+        // Also consider the current page number (rendered as a <span> in the pager,
+        // not an <a>). If the current page is the highest, the anchors won't include it.
+        const currentPage = detectCurrentPage(doc);
+        if (currentPage !== null) max = Math.max(max, currentPage);
+        dbg(`parseTotalPages — links found: [${found.join(',')}] | current page: ${currentPage} → max=${max}`);
         return max;
+    }
+
+    // DIAG: extract the real grid UniqueID from the pager's __doPostBack href.
+    function extractGridUniqueID(doc) {
+        const link = doc.querySelector('a[href*="Page$"]');
+        if (link) {
+            const m = (link.getAttribute('href') || '').match(/__doPostBack\('([^']+)'/);
+            if (m) return m[1];
+        }
+        return GRID_UNIQUE_ID; // fallback hardcoded
+    }
+
+    // Signature of files on a page (filenames sorted) — detects true duplicate pages.
+    // FIX: Previously used buttonName (e.g. "UcVoucherView1$DWNL$grdId$ctl02$search")
+    // which is the SAME on every page because ASP.NET GridView reuses control names.
+    // Now uses filename to detect actual content duplication.
+    function filesSig(files) {
+        return files.map(f => f.filename).sort().join('|');
+    }
+
+    // DIAG: detect current page number from the pager's active span.
+    function detectCurrentPage(doc) {
+        const grid = doc.querySelector('table[id*="grdId"]');
+        if (!grid) return null;
+        const rows = Array.from(grid.querySelectorAll('tr'));
+        const pagerRow = rows[rows.length - 1];
+        if (!pagerRow) return null;
+        const span = pagerRow.querySelector('span');
+        if (span) {
+            const n = parseInt((span.textContent || '').trim(), 10);
+            if (!isNaN(n) && n > 0) return n;
+        }
+        return null;
     }
     async function fetchVoucherPage(enc, page, prevFormState) {
         const url = `https://www.mercadopublico.cl/bid/modules/bid/voucherview.aspx?enc=${encodeURIComponent(enc)}`;
         if (page === 1 || !prevFormState) {
+            dbg(`fetchVoucherPage — GET página ${page}`);
             const r = await fetch(url, { credentials: 'include' });
             if (!r.ok) throw new Error(`GET voucher página ${page}: HTTP ${r.status}`);
-            return await r.text();
+            const text = await r.text();
+            dbg(`fetchVoucherPage — GET respuesta: ${text.length} chars`);
+            return text;
         }
         const params = new URLSearchParams();
-        for (const [k, v] of Object.entries(prevFormState)) params.append(k, v);
+        // CRÍTICO: prevFormState ya incluye __EVENTTARGET/__EVENTARGUMENT (hidden fields
+        // vacíos del form ASP.NET). Si se hace append() se crean claves DUPLICADAS y
+        // ASP.NET lee la primera (vacía) → el servidor ignora la paginación y siempre
+        // devuelve la página 1. Se eliminan antes del loop y se añaden una sola vez.
+        const state = { ...prevFormState };
+        delete state.__EVENTTARGET;
+        delete state.__EVENTARGUMENT;
+        for (const [k, v] of Object.entries(state)) params.append(k, v);
         params.append('__EVENTTARGET', GRID_UNIQUE_ID);
         params.append('__EVENTARGUMENT', `Page$${page}`);
+        // DIAG: log the POST details
+        dbg(`fetchVoucherPage — POST página ${page} | __EVENTTARGET="${GRID_UNIQUE_ID}" __EVENTARGUMENT="Page$${page}" | body length=${params.toString().length}`);
         const r = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -145,7 +222,67 @@
             credentials: 'include'
         });
         if (!r.ok) throw new Error(`POST voucher página ${page}: HTTP ${r.status}`);
-        return await r.text();
+        const text = await r.text();
+        dbg(`fetchVoucherPage — POST respuesta: ${text.length} chars`);
+        return text;
+    }
+
+    // Descarga un archivo individual: hace el POST "Ver Anexo" desde el content script
+    // (same-origin, cookies automáticas) y envía el blob como base64 al background
+    // para que lo guarde con chrome.downloads.download.
+    async function downloadOneFile(enc, formState, buttonName, filename, rootFolder) {
+        const params = new URLSearchParams();
+        const state = { ...formState };
+        delete state.__EVENTTARGET;
+        delete state.__EVENTARGUMENT;
+        for (const [k, v] of Object.entries(state)) params.append(k, v);
+        params.append('__EVENTTARGET', '');
+        params.append('__EVENTARGUMENT', '');
+        params.append(`${buttonName}.x`, '1');
+        params.append(`${buttonName}.y`, '1');
+
+        const url = `https://www.mercadopublico.cl/bid/modules/bid/voucherview.aspx?enc=${encodeURIComponent(enc)}`;
+        const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+            credentials: 'include'
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const ct = r.headers.get('content-type') || '';
+        if (/html|json|text\/plain/i.test(ct)) {
+            dbg(`  ⚠️ "${filename}" — respuesta no binaria (content-type: "${ct}"), se omite`);
+            return false;
+        }
+
+        const blob = await r.blob();
+        if (!blob || blob.size === 0) {
+            dbg(`  ⚠️ "${filename}" — blob vacío, se omite`);
+            return false;
+        }
+
+        const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        const safeName = sanitize(filename);
+        const relativePath = `${rootFolder}/${safeName}`;
+
+        const resp = await chrome.runtime.sendMessage({
+            action: 'saveBlobAsFile',
+            base64,
+            filename: relativePath
+        });
+
+        const ok = resp && resp.success;
+        if (!ok) {
+            dbg(`  ⚠️ "${filename}" — chrome.downloads.download falló: ${(resp && resp.error) || 'unknown'}`);
+        }
+        return ok;
     }
 
     async function downloadOffer(enc, providerName, code, button) {
@@ -160,6 +297,7 @@
             let formState = parseFormState(doc);
             const totalPages = parseTotalPages(doc);
             dbg(`Oferta "${providerName}" — ${totalPages} pág., carpeta "${rootFolder}".`);
+            let prevSig = null;
             for (let page = 1; page <= totalPages; page++) {
                 if (page > 1) {
                     html = await fetchVoucherPage(enc, page, formState);
@@ -167,14 +305,31 @@
                     formState = parseFormState(doc);
                 }
                 const files = parseFiles(doc);
-                if (files.length === 0) continue;
+                if (files.length === 0) {
+                    dbg(`Página ${page}/${totalPages}: 0 archivos (skip).`);
+                    continue;
+                }
+                const sig = filesSig(files);
+                if (sig === prevSig) {
+                    dbg(`⚠️ Página ${page} DUPLICADA (mismos archivos que la página anterior). Se finaliza.`);
+                    break;
+                }
+                prevSig = sig;
+                dbg(`Página ${page}/${totalPages}: ${files.length} archivos.`);
                 button.textContent = `⏳${page}/${totalPages}`;
-                const resp = await chrome.runtime.sendMessage({
-                    action: 'downloadVoucherFiles', formState, enc, files, rootFolder
-                });
-                const got = (resp && typeof resp.downloaded === 'number') ? resp.downloaded : 0;
+                let got = 0;
+                for (let i = 0; i < files.length; i++) {
+                    const f = files[i];
+                    try {
+                        const ok = await downloadOneFile(enc, formState, f.buttonName, f.filename, rootFolder);
+                        if (ok) got++;
+                    } catch (err) {
+                        dbg(`  ⚠️ Error descargando "${f.filename}": ${err.message}`);
+                    }
+                    await new Promise(r => setTimeout(r, 300));
+                }
                 totalDownloaded += got;
-                dbg(`Página ${page}/${totalPages}: ${got}/${files.length}.`);
+                dbg(`Página ${page}/${totalPages}: descargados ${got}/${files.length}.`);
                 await new Promise(r => setTimeout(r, 400));
             }
             button.textContent = '✅';
@@ -188,28 +343,106 @@
         }
     }
 
+    // ---- Botón unificado "Descargar Todo" ----
+
+    function buildDownloadAllButton(count) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.id = 'mp-download-all-btn';
+        b.textContent = `📥 Todo (${count})`;
+        b.title = `Descargar todas las ofertas secuencialmente (${count} ofertas)`;
+        Object.assign(b.style, {
+            position: 'fixed', top: '8px', right: '8px', zIndex: '2147483647',
+            padding: '8px 16px', backgroundColor: '#00549f', color: '#fff',
+            border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px',
+            fontWeight: 'bold', boxShadow: '0 2px 8px rgba(0,0,0,0.35)', lineHeight: '1.2'
+        });
+        b.addEventListener('mouseover', () => { if (!b.disabled) b.style.backgroundColor = '#0072ce'; });
+        b.addEventListener('mouseout', () => { if (!b.disabled) b.style.backgroundColor = '#00549f'; });
+        return b;
+    }
+
+    async function downloadAllOffers(offers, button) {
+        if (button.disabled) return;
+        const origText = button.textContent;
+        button.disabled = true;
+        let totalFiles = 0;
+        try {
+            for (let i = 0; i < offers.length; i++) {
+                const { enc, providerName, code } = offers[i];
+                button.textContent = `⏳ ${i + 1}/${offers.length}`;
+                dbg(`=== Oferta ${i + 1}/${offers.length}: "${providerName}" ===`);
+                // Mock button para reutilizar downloadOffer sin acoplar UI
+                const mockBtn = { disabled: false, textContent: '', title: '' };
+                await downloadOffer(enc, providerName, code, mockBtn);
+                // downloadOffer ya loguea el total; lo aproximamos por los logs
+                dbg(`=== Oferta ${i + 1}/${offers.length} finalizada ===`);
+            }
+            button.textContent = '✅';
+            dbg(`=== DESCARGA MASIVA COMPLETADA: ${offers.length} oferta(s) procesadas ===`);
+        } catch (err) {
+            console.error(LOG, 'Error downloadAll', err);
+            button.textContent = '❌';
+            button.title = 'Error: ' + (err && err.message);
+        } finally {
+            setTimeout(() => { button.disabled = false; button.textContent = origText; }, 5000);
+        }
+    }
+
     // Inyecta 📥 en TODOS los docs (TOP + iframes mismo origen).
+    // También inyecta un botón flotante "Descargar Todo" cuando hay 2+ ofertas.
     function injectButtons() {
         const docs = collectDocs();
         let added = 0, totalComprobante = 0;
+        const allOffers = []; // { enc, providerName, code } — TODAS las ofertas
+        // El código de licitación puede estar en cualquier frame (tabla HTML),
+        // no necesariamente en el mismo doc que los botones de comprobante.
+        const code = getLicitacionCode(docs);
         for (const doc of docs) {
             const buttons = doc.querySelectorAll(COMPROBANTE_SEL);
             totalComprobante += buttons.length;
             if (buttons.length === 0) continue;
-            const code = getLicitacionCode(doc);
             buttons.forEach(btn => {
-                if (btn.getAttribute(ATTACHED_ATTR)) return;
                 const enc = extractEncFromButton(btn);
                 if (!enc) return;
+                const providerName = findProviderName(btn);
+                // Recolectar TODAS las ofertas (para el botón "Descargar Todo")
+                allOffers.push({ enc, providerName, code });
+                // Solo inyectar 📥 individual si no estaba ya adjunto
+                if (btn.getAttribute(ATTACHED_ATTR)) return;
                 btn.setAttribute(ATTACHED_ATTR, '1');
                 const dl = buildDownloadButton();
                 dl.addEventListener('click', (e) => {
                     e.preventDefault(); e.stopPropagation();
-                    downloadOffer(enc, findProviderName(btn), code, dl);
+                    downloadOffer(enc, providerName, code, dl);
                 });
                 btn.insertAdjacentElement('afterend', dl);
                 added++;
             });
+        }
+        // Crear o actualizar botón "Descargar Todo" si hay 2+ ofertas.
+        if (allOffers.length >= 2) {
+            for (const doc of docs) {
+                if (!doc.querySelector(COMPROBANTE_SEL)) continue;
+                let btnAll = doc.getElementById('mp-download-all-btn');
+                if (!btnAll) {
+                    btnAll = buildDownloadAllButton(allOffers.length);
+                    btnAll.addEventListener('click', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        const offers = btnAll.__offers || [];
+                        if (offers.length > 0 && !btnAll.disabled) {
+                            downloadAllOffers(offers, btnAll);
+                        }
+                    });
+                    try { doc.body.appendChild(btnAll); } catch (_) { }
+                }
+                // Actualizar la lista de ofertas y el contador (salvo durante descarga activa)
+                if (!btnAll.disabled) {
+                    btnAll.__offers = allOffers.slice();
+                    btnAll.textContent = `📥 Descargar todo (${allOffers.length})`;
+                }
+                break;
+            }
         }
         if (added > 0) dbg(`Inyectados ${added} 📥 (comprobante vistos: ${totalComprobante}).`);
         return totalComprobante;
@@ -230,7 +463,13 @@
     function scan() {
         let comprobante = 0;
         try { comprobante = injectButtons(); } catch (e) { console.error(LOG, 'scan error', e); }
-        if (!__reported || __cycle % 5 === 0) { __reported = true; reportSW(comprobante); }
+        // FIX (Issue 2): Only report to the service worker when comprobante buttons
+        // are actually found. This prevents irrelevant frames (Menu.aspx, Reloj.aspx,
+        // etc.) from spamming the SW console with "comprobante:0" messages every 7.5s.
+        if (comprobante > 0 && (!__reported || __cycle % 5 === 0)) {
+            __reported = true;
+            reportSW(comprobante);
+        }
         __cycle++;
     }
 

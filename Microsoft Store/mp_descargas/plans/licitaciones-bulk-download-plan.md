@@ -48,6 +48,25 @@
 > Los archivos `licitaciones_download.js` (extensión) y `voucher_content.js` quedan como respaldo por si Edge
 > deja de bloquear la inyección.
 
+> ## ✅ SOLUCIÓN DEFINITIVA (v3) — Popup + executeScript + fix de paginación
+> **Problemas de la v2 (script de consola):**
+> 1. **Paginación rota:** `fetchVoucherPage` usaba `params.append()` para `__EVENTTARGET`/`__EVENTARGUMENT`,
+>    pero esos campos ya existían en `prevFormState` (hidden fields vacíos del form ASP.NET). Resultado:
+>    claves **duplicadas** en el body, ASP.NET leía el primer valor (vacío) y **siempre devolvía la página 1**
+>    → se descargaban los mismos 6 archivos 5 veces. **Fix:** `delete state.__EVENTTARGET/__EVENTARGUMENT`
+>    antes del loop (aplicado en `licitaciones_download.js`, `voucher_background.js` y
+>    `debug/licitaciones_downloader_console.js`).
+> 2. **Pegado manual:** derrotaba el propósito del plugin. **Fix:** se añadió un **popup**
+>    (`popup.html` + `popup.js`) con un botón que inyecta `licitaciones_download.js` en todos los frames vía
+>    `chrome.scripting.executeScript({target:{tabId, allFrames:true}})`. Esto usa el árbol interno de
+>    frames del navegador (no un walk JS), por lo que **alcanza la grilla aunque viva en un iframe anidado**.
+>
+> **Cambios al manifest:** `"scripting"` añadido a `permissions`; `"action"` con `"default_popup":"popup.html"`.
+>
+> **Flujo de uso:** abrir el *Resumen de ofertas* → clic en el icono de la extensión →
+> *"Inyectar botones de descarga"* → aparece 📥 junto a cada oferta → clic 📥 →
+> descarga TODAS las páginas en `Licitacion_<código>/<proveedor>/`.
+
 ---
 
 ## 1. Goal
