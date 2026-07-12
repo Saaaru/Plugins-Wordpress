@@ -9,7 +9,8 @@ This document is compiled specifically for Large Language Models (LLMs) and AI A
 *   **Platform:** Google Chrome / Microsoft Edge Extension (Manifest V3).
 *   **Target Domain:** `https://*.mercadopublico.cl/*` (Specifically focusing on the React-based **"Compra Ágil"** portal).
 *   **Host Site Stack:** Single Page Application (SPA) built with **React** and styled via **Material UI (MUI)**.
-*   **Permissions Requested:** `downloads` (for downloading files directly), `host_permissions` for `mercadopublico.cl`.
+*   **Permissions Requested:** `downloads` (direct file saving, no popup prompt), `scripting` (programmatic injection of `licitaciones_download.js` into all frames from the popup), and `host_permissions` for `*.mercadopublico.cl`.
+*   **Two Target Modules:** (1) **Compra Ágil** — React/MUI SPA (`content.js`, `highlight_offers.js`, `bulk_editor.js`); (2) **Licitaciones / Voucher View** — legacy ASP.NET WebForms (`voucherview.aspx`) handled by `voucher_content.js`, `licitaciones_download.js` and `voucher_background.js`.
 
 ---
 
@@ -55,10 +56,11 @@ sequenceDiagram
 *   **Role:** Global declaration manifest.
 *   **Context:** Extention Root.
 *   **Key Declarations:**
-    *   **Service Worker:** Declares `background.js` as an ES module (`"type": "module"`).
-    *   **Content Scripts:** Injects `content.js`, `highlight_offers.js`, and `bulk_editor.js` into all subframes (`"all_frames": true`) of `mercadopublico.cl` at `document_end`.
+    *   **Service Worker:** Declares `background.js` as an ES module (`"type": "module"`), which in turn imports `voucher_background.js`.
+    *   **Content Scripts:** Injects `content.js`, `highlight_offers.js`, `bulk_editor.js`, `voucher_content.js`, and `licitaciones_download.js` into all subframes (`"all_frames": true`) of `mercadopublico.cl` at `document_end`.
+    *   **Action / Popup:** Declares `popup.html` (controlled by `popup.js`) used to inject `licitaciones_download.js` across all frames on demand.
     *   **Web Accessible Resources:** Exposes `api_interceptor.js` so it can be programmatically injected into the webpage's main execution context.
-    *   **Permissions:** Requests `downloads` to bypass standard browser download prompt popups and orchestrate file management.
+    *   **Permissions:** Requests `downloads` (no-prompt saving) and `scripting` (programmatic `executeScript` from the popup into nested frames).
 
 ---
 
@@ -170,6 +172,45 @@ sequenceDiagram
 
 ---
 
+### 7. `popup.html` / `popup.js` (Licitaciones Injector UI)
+*   **Role:** Toolbar popup that one-click injects the Licitaciones bulk-download script into every frame of the active tab.
+*   **Context:** **Extension Popup** (runs in the extension's own page context).
+*   **Key Operations:**
+    *   Queries the active tab; aborts unless its URL contains `mercadopublico.cl`.
+    *   Calls `chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['licitaciones_download.js'] })` — this traverses the browser's internal frame tree (not a JS walk), so it reaches the `grdSupplies` grid even when it lives in a nested same-origin iframe.
+    *   After a short scan delay, re-executes `executeScript` with an inline `func` counting `[data-mp-dl-attached="1"]` elements across all frames and reports the total to the user.
+
+### 8. `voucher_content.js` (Licitaciones Bulk Download Orchestrator — Voucher View)
+*   **Role:** Bulk-downloads attachments from the legacy ASP.NET WebForms voucher grid.
+*   **Context:** **Isolated Content Script** (independently auto-detects the voucher page; no-ops otherwise).
+*   **Key Operations:**
+    *   Detects the attachments grid via `table[id*="grdId"]` and injects a global `📥 Descargar todos los adjuntos` button.
+    *   Collects all hidden form fields (`__VIEWSTATE`, `__VIEWSTATEGENERATOR`, …) plus the visible rows.
+    *   Sends each file to the background (`downloadVoucherFiles` action), which replays the captcha-free "Ver Anexo" POST.
+    *   Drives pagination and persists resumption state in `sessionStorage` (`mp_voucher_bulk_state`), making it robust to both full postbacks (page reload) and partial postbacks (`UpdatePanel`).
+    *   Guard `window.__mpVoucherContentLoaded` prevents double-initialization whether injected by the manifest or by `chrome.scripting`.
+
+### 9. `voucher_background.js` (Voucher "Ver Anexo" Replicator — ES module)
+*   **Role:** Replays the ASP.NET postback that downloads a single attachment file from the voucher grid.
+*   **Context:** **Extension Service Worker** (imported by `background.js` via `initVoucherHandler()`).
+*   **Mechanism:**
+    *   Rebuilds an `application/x-www-form-urlencoded` body with all hidden form fields plus the row button coordinates (`<buttonName>.x=1&<buttonName>.y=1`), removing duplicate `__EVENTTARGET`/`__EVENTARGUMENT`.
+    *   `fetch(url, { method:'POST', credentials:'include' })` — session cookies travel automatically thanks to granted `host_permissions`.
+    *   Converts the response blob to a base64 Data URL (`FileReader`) and saves it via `chrome.downloads.download` under `Licitacion_<CODE>/<filename>`.
+    *   Registers its own `chrome.runtime.onMessage` listener for action `downloadVoucherFiles`, distinct from the Compra Ágil `downloadAllOffers` handler.
+
+### 10. `licitaciones_download.js` (Licitaciones Grid Injector — same-origin iframe walker)
+*   **Role:** Walks same-origin iframes from the top frame to locate the `grdSupplies` grid and inject a per-offer `📥` button next to each "Ver Comprobante de oferta".
+*   **Context:** **Isolated Content Script**, injected either by the manifest (`all_frames:true`) or by the popup via `chrome.scripting`.
+*   **Mechanism:**
+    *   From the TOP frame, recursively traverses same-origin iframes (`www.mercadopublico.cl → OpeningFrame → SupplySummary`) to find `grdSupplies` and `input[type="image"][onclick*="voucherview.aspx?enc="]` (regex `voucherview\.aspx\?enc=([^'"]+)`).
+    *   Injects a `📥` button (`data-mp-dl-attached="1"`) beside each comprobante; the click handler lives in the top frame's isolated world (has `chrome.runtime` and `fetch`).
+    *   On click: fetches the voucher by `enc`, pages through it (GET page 1, then `__doPostBack` for subsequent pages), parses each with `DOMParser`, and dispatches each page to the background (`downloadVoucherFiles`) which saves under `Licitacion_<código>/<proveedor>/`.
+    *   Polls every ~1.5s to catch the grid even if it loads late or after a postback. Reports diagnostics to the service worker via `licitacionesScanReport` / `licitacionesBootReport`.
+    *   Licitación code regex: `/\b\d{3,}-\d+-L\d{2,}\b/`; grid unique ID: `UcVoucherView1$DWNL$grdId`.
+
+---
+
 ## 📡 Message Bus & Inter-Script Communication Details
 
 Here are the precise message payloads used for internal communication:
@@ -222,6 +263,25 @@ Here are the precise message payloads used for internal communication:
     ```
 *   **Response (on completion):** The `downloadAllOffers` callback receives `{ "success": true, "totalDownloaded": 47 }`, which the content script uses to populate the completion modal.
 
+### 4. Voucher Content Script to Background Worker (Licitaciones)
+*   **Method:** `chrome.runtime.sendMessage(payload)` (handled by `voucher_background.js` via `initVoucherHandler`)
+*   **Type:** `downloadVoucherFiles`
+    ```json
+    {
+      "action": "downloadVoucherFiles",
+      "files": [{ "formState": { "__VIEWSTATE": "...", "__VIEWSTATEGENERATOR": "..." }, "enc": "<encrypted>", "buttonName": "grdId$ctl02$btnVerAnexo", "filename": "oferta.pdf", "provider": "Proveedor S.A.", "rootFolder": "Licitacion_1234-56-LP12" }]
+    }
+    ```
+*   The background replays the captcha-free "Ver Anexo" POST (`credentials: 'include'`) and saves each blob under `Licitacion_<code>/<proveedor>/<file>`.
+
+### 5. Licitaciones Content Script to Background (Diagnostics)
+*   **Method:** `chrome.runtime.sendMessage(payload)` (handled by `background.js`)
+*   **Types:** `licitacionesScanReport`, `licitacionesBootReport` — periodic per-frame reports (`url`, `frame`, `comprobante`/`found` counts, `grids`, `isTop`) so the service worker can observe which frames contain the `grdSupplies` grid.
+
+### 6. Popup to Page (Programmatic Injection)
+*   **Method:** `chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['licitaciones_download.js'] })`
+*   Then a second `executeScript` with an inline `func` returning `document.querySelectorAll('[data-mp-dl-attached="1"]').length` per frame to tally injected buttons.
+
 ---
 
 ## 🎯 Selector Reference Sheet
@@ -237,3 +297,11 @@ Keep these standard Material UI selector hooks in mind when reading or editing t
 *   **Provider RUT (Export):** Matched via regex `\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b` against the card's `innerHTML`.
 *   **Offer Price (Export):** The `h3` element containing a `$` symbol within an offer card.
 *   **Inadmissibility Status (Export/Filter):** Any `span`, `div`, or `p` whose trimmed `textContent` equals exactly `INADMISIBLE`.
+
+### Licitaciones / Voucher View (legacy ASP.NET WebForms)
+*   **Voucher Attachments Grid:** `table[id*="grdId"]` (unique ID `UcVoucherView1$DWNL$grdId`).
+*   **Offers Grid (Resumen):** `table[id*="grdSupplies"], table#grdSupplies`.
+*   **Comprobante Buttons:** `input[type="image"][onclick*="voucherview.aspx?enc="]`; the `enc` token is captured via regex `voucherview\.aspx\?enc=([^'"]+)`.
+*   **Licitación Code:** regex `/\b\d{3,}-\d+-L\d{2,}\b/`, also available as the anchor `#Lnk_ExternalCode_Value`.
+*   **Injected Download Markers:** elements carrying `data-mp-dl-attached="1"` and the document flag `<html data-mp-licitaciones-dl>` / `<html data-mp-voucher-cs>`.
+*   **Hidden Form State (Ver Anexo replay):** `#__VIEWSTATE`, `#__VIEWSTATEGENERATOR`, `#__EVENTVALIDATION`, etc., enumerated from the page `<form>`.

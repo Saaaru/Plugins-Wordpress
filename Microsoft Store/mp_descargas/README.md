@@ -1,6 +1,8 @@
-# 📥 MP Tools para Mercado Público (Compra Ágil) v4.2.0
+# 📥 MP Tools para Mercado Público (Compra Ágil) v4.3.5
 
-Una potente y sofisticada extensión de Chrome/Edge diseñada para optimizar, automatizar y agilizar tareas críticas dentro del portal de [Mercado Público](https://www.mercadopublico.cl/), específicamente en el módulo de **Compra Ágil**. Esta herramienta agrupa cuatro funcionalidades clave en una única solución integrada que ahorra horas de trabajo manual.
+Una potente y sofisticada extensión de **Chrome / Edge** diseñada para optimizar, automatizar y agilizar tareas críticas dentro del portal de [Mercado Público](https://www.mercadopublico.cl/), específicamente en el módulo de **Compra Ágil** y ahora también en el portal legacy de **Licitaciones (Voucher View)**. Esta herramienta agrupa cinco funcionalidades clave en una única solución integrada que ahorra horas de trabajo manual.
+
+> ✅ **100% compatible con Google Chrome y Microsoft Edge** (Manifest V3). Ver [`COMPATIBILIDAD.md`](COMPATIBILIDAD.md) para el análisis detallado.
 
 ---
 
@@ -8,10 +10,11 @@ Una potente y sofisticada extensión de Chrome/Edge diseñada para optimizar, au
 
 ```mermaid
 graph TD
-    A[MP Tools Extension] --> B[1. Descarga Masiva]
+    A[MP Tools Extension] --> B[1. Descarga Masiva Compra Ágil]
     A --> C[2. Carga Masiva]
     A --> D[3. Resaltado & Auto-Rechazo]
     A --> E[4. Exportación de Ofertas]
+    A --> F[5. Descarga Masiva Licitaciones]
 
     B --> B1[Captura automática de tokens]
     B --> B2[Filtro inteligente de Inadmisibles]
@@ -29,9 +32,14 @@ graph TD
     E --> E1[Extracción de datos de cada oferta]
     E --> E2[Exportación a CSV compatible con Excel]
     E --> E3[BOM UTF-8 para acentos correctos]
+
+    F --> F1[Portal legacy ASP.NET WebForms]
+    F --> F2[Replica del POST Ver Anexo sin captcha]
+    F --> F3[Paginación automática con reanudación]
+    F --> F4[Organización Licitacion_Codigo/Proveedor]
 ```
 
-### 1. 📂 Descarga Masiva de Adjuntos
+### 1. 📂 Descarga Masiva de Adjuntos (Compra Ágil)
 Agrega botones automatizados para descargar archivos y ofertas de forma masiva y organizada.
 * **Descarga de Oferta Individual**: Obtiene todos los documentos vinculados a una cotización específica con un solo clic mediante el botón `📥 Descargar todo`.
 * **Descarga Masiva de Todas las Ofertas**: Agrega un botón global `📥 Descargar todas las ofertas` al lado del indicador de llamado.
@@ -75,25 +83,41 @@ Extrae y consolida automáticamente los datos de todas las ofertas visibles en e
 * **Compatibilidad Total con Excel**: Genera un archivo delimitado por punto y coma (`;`) con marca de orden de bytes UTF-8 (BOM) para garantizar que los acentos y caracteres especiales se visualicen correctamente al abrirlo.
 * **Naming Automático**: El archivo se nombra automáticamente con el código de cotización (ej. `Ofertas_2284-145-COT26.csv`).
 
+### 5. 🏛️ Descarga Masiva de Adjuntos en Licitaciones (Voucher View) — *NUEVO*
+Extiende la capacidad de descarga masiva al portal legacy de **Licitaciones** (`voucherview.aspx`, ASP.NET WebForms), independiente del módulo Compra Ágil.
+* **Botón dedicado por oferta**: Inyecta un botón `📥` junto a cada "Ver Comprobante de oferta" en la grilla de Resumen de Ofertas (`grdSupplies`), incluso si vive dentro de iframes anidados del mismo origen.
+* **Inyección multi-frame confiable**: El **popup de la extensión** inyecta el script en *todos* los frames de la pestaña activa mediante `chrome.scripting.executeScript({ allFrames: true })`, alcanzando la grilla aunque se encuentre en un iframe anidado.
+* **Replica del POST "Ver Anexo" sin captcha**: El service worker reconstruye el body `application/x-www-form-urlencoded` con todos los campos ocultos del formulario (`__VIEWSTATE`, `__VIEWSTATEGENERATOR`, …) más las coordenadas del botón de fila (`<buttonName>.x=1&<buttonName>.y=1`). Las cookies de sesión viajan automáticamente (`credentials: 'include'`).
+* **Paginación automática con reanudación**: Avanza página por página y guarda el estado en `sessionStorage`, lo que lo hace robusto ante postbacks completos (recarga de página) y postbacks parciales (`UpdatePanel`).
+* **Organización por proveedor**: Guarda cada adjunto en `Descargas/Licitacion_<código>/<proveedor>/<archivo>`.
+
 ---
 
 ## 🛠️ Arquitectura del Proyecto
 
-El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para Manifest V3 de Chrome/Edge:
+El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para **Manifest V3** de Chrome/Edge:
 
 | Archivo | Contexto | Responsabilidad Principal |
 | :--- | :--- | :--- |
-| **[`manifest.json`](manifest.json)** | Extensión | Configuración global, permisos de descargas, inyección y declaración de recursos. |
+| **[`manifest.json`](manifest.json)** | Extensión | Configuración global, permisos (`downloads`, `scripting`), inyección de content scripts y declaración de recursos accesibles. |
+| **[`popup.html`](popup.html)** / **[`popup.js`](popup.js)** | UI Popup | Ventana emergente de la extensión. Inyecta `licitaciones_download.js` en todos los frames del tab activo y reporta cuántos botones `📥` se crearon. |
 | **[`api_interceptor.js`](api_interceptor.js)** | Página Principal | Intercepta `window.fetch` y `XMLHttpRequest` para extraer payloads y tokens de portación (`Authorization`). |
-| **[`content.js`](content.js)** | Script de Contenido | Funciona como puente. Inyecta elementos UI de descarga/exportación y canaliza los tokens al Background. |
-| **[`background.js`](background.js)** | Service Worker | Orquesta la descarga asíncrona concurrente de archivos pesados respetando límites de tasa (rate-limiting) y reporta progreso. |
+| **[`content.js`](content.js)** | Script de Contenido | Funciona como puente. Inyecta elementos UI de descarga/exportación y canaliza los tokens al Background (Compra Ágil). |
+| **[`background.js`](background.js)** | Service Worker | Orquesta la descarga asíncrona concurrente de archivos pesados respetando límites de tasa (rate-limiting) y reporta progreso. Importa `voucher_background.js`. |
 | **[`bulk_editor.js`](bulk_editor.js)** | Script de Contenido | Procesa el portapapeles y ejecuta la simulación de entrada e interacciones en formularios React. |
 | **[`highlight_offers.js`](highlight_offers.js)** | Script de Contenido | Analiza el DOM, evalúa reglas de presupuesto, colorea la interfaz e impulsa el robot de descarte. |
+| **[`voucher_content.js`](voucher_content.js)** | Script de Contenido | Descarga masiva de adjuntos en **Licitaciones** (Voucher View). Detecta la grilla, inyecta el botón global y coordina la paginación. |
+| **[`voucher_background.js`](voucher_background.js)** | Service Worker (ES module) | Replica el POST "Ver Anexo" (captcha-free) y guarda cada blob con `chrome.downloads.download`. |
+| **[`licitaciones_download.js`](licitaciones_download.js)** | Script de Contenido / Popup | Recorre iframes del mismo origen, localiza la grilla `grdSupplies` e inyecta `📥` junto a cada comprobante de oferta. |
 
 ---
 
-## 📦 Instalación (Modo Desarrollador)
+## 📦 Instalación
 
+### Desde la Chrome Web Store / Microsoft Edge Add-ons
+Basta con buscar **"MP Tools Mercado Público"** en la tienda de extensiones de tu navegador e instalarla. La extensión se activará automáticamente al navegar por Mercado Público.
+
+### Modo Desarrollador (carga local)
 1. Descarga o clona este repositorio en tu máquina local.
 2. Abre Google Chrome o Microsoft Edge y dirígete al panel de administración de extensiones:
    * Chrome: `chrome://extensions/`
@@ -110,7 +134,7 @@ El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para M
 > [!IMPORTANT]
 > Para el correcto funcionamiento de la descarga masiva, la extensión requiere que el usuario haya iniciado sesión en Mercado Público. Los tokens se capturan dinámicamente de forma automática en el primer request que la página realiza a las APIs oficiales del portal.
 
-### 📥 Descarga Masiva
+### 📥 Descarga Masiva (Compra Ágil)
 1. Ve a la ficha de ofertas o al módulo de adjuntos de cualquier cotización.
 2. La extensión detectará los adjuntos y pintará un botón azul con el texto **`📥 Descargar todo`** (oferta individual) o **`📥 Descargar todas las ofertas`** (todas las ofertas del llamado).
 3. Haz clic y observa cómo se descargan los archivos en subcarpetas de manera estructurada. El botón mostrará el progreso en tiempo real.
@@ -128,6 +152,12 @@ El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para M
 * No requiere acción del usuario. Se ejecuta de fondo en las pantallas de Cuadros Comparativos.
 * Si una oferta excede el presupuesto disponible y requiere rechazo, haz clic en **`🤖 Auto-Rechazar`** para descartar la oferta en segundos con la causal correcta de manera automatizada.
 
+### 🏛️ Descarga Masiva en Licitaciones (Voucher View)
+1. Abre el **Resumen de ofertas** de una Licitación en Mercado Público.
+2. Haz clic en el ícono de la extensión (toolbar) y presiona **`🔄 Inyectar botones de descarga`**.
+3. Aparecerá un botón `📥` junto a cada oferta de la grilla `grdSupplies`.
+4. Pulsa `📥` en la oferta deseada para descargar **todos** sus adjuntos (todas las páginas) en `Descargas/Licitacion_<código>/<proveedor>/`.
+
 ---
 
 ## 🔒 Privacidad y Seguridad
@@ -138,7 +168,26 @@ El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para M
 
 ---
 
+## 🌐 Compatibilidad de Navegadores
+
+La extensión está construida sobre **Manifest V3** y utiliza únicamente APIs estándar del ecosistema Chromium (`chrome.*`), por lo que es **totalmente compatible** con:
+
+| Navegador | Estado | Notas |
+| :--- | :--- | :--- |
+| **Google Chrome** | ✅ Compatible | Plataforma de referencia (Manifest V3 nativo). |
+| **Microsoft Edge** | ✅ Compatible | Basado en Chromium; las APIs `chrome.downloads`, `chrome.scripting`, service worker tipo módulo y `all_frames` funcionan idénticamente. |
+
+> El análisis completo API por API está disponible en [`COMPATIBILIDAD.md`](COMPATIBILIDAD.md).
+
+---
+
 ## 📝 Registro de Cambios (Changelog)
+
+### v4.3.5
+* ✨ **Nuevo módulo**: Descarga masiva de adjuntos para **Licitaciones (Voucher View)** mediante replica del POST "Ver Anexo" (captcha-free) y paginación automática con reanudación vía `sessionStorage`.
+* ✨ **Nuevo**: Popup de la extensión (`popup.html` / `popup.js`) que inyecta el script de Licitaciones en todos los frames del tab activo con un solo clic.
+* 🛠️ **Arquitectura**: `background.js` ahora es importador de `voucher_background.js` (handler `downloadVoucherFiles`). Se agrega el permiso `scripting`.
+* 🛠️ **Mejora**: Recorrido recursivo de iframes del mismo origen para localizar la grilla `grdSupplies` y los comprobantes de oferta.
 
 ### v4.2.0
 * ✨ **Nuevo**: Exportación de ofertas a Excel/CSV (`📊 Exportar tabla a Excel`) con datos completos de proveedor, RUT, vigencia, monto e inadmisibilidad.
