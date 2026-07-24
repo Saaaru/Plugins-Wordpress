@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TM Capacitación - Reportes Avanzados Moodle
  * Description: Panel de administración para consultar y descargar reportes detallados de alumnos desde la BD local de Moodle.
- * Version: 1.0.0
+ * Version: 2.0.0
  * Author: Solvitu
  * License: GPL2
  */
@@ -67,6 +67,23 @@ function tm_reportes_exportar_excel()
         if ($curso_seleccionado > 0 && in_array($vista_seleccionada, ['notas', 'accesos'])) {
             $datos = tm_reportes_obtener_datos_curso($curso_seleccionado, $vista_seleccionada);
 
+            // Aplicar ordenamiento por defecto en el export
+            if ($vista_seleccionada === 'accesos' && is_array($datos)) {
+                usort($datos, function ($a, $b) {
+                    $aAccess = intval($a['ultimo_acceso_unix']);
+                    $bAccess = intval($b['ultimo_acceso_unix']);
+                    // Nunca primero, luego por fecha ascendente (más inactivo arriba)
+                    if ($aAccess === 0 && $bAccess === 0) {
+                        return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
+                    }
+                    if ($aAccess === 0)
+                        return -1;
+                    if ($bAccess === 0)
+                        return 1;
+                    return $aAccess - $bAccess;
+                });
+            }
+
             header('Content-Type: text/csv; charset=utf-8');
             header('Content-Disposition: attachment; filename=reporte_' . $vista_seleccionada . '_' . date('Ymd') . '.csv');
 
@@ -86,12 +103,20 @@ function tm_reportes_exportar_excel()
                     ], ';');
                 }
             } elseif ($vista_seleccionada === 'notas') {
+                // Ordenar alumnos por nombre en el export
+                if (!empty($datos['alumnos'])) {
+                    usort($datos['alumnos'], function ($a, $b) {
+                        return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
+                    });
+                }
+
                 $cabeceras = ['RUT', 'Nombre', 'Apellido', 'Correo'];
                 if (!empty($datos['actividades'])) {
                     foreach ($datos['actividades'] as $act_name) {
                         $cabeceras[] = $act_name;
                     }
                 }
+                $cabeceras[] = 'Total del Curso'; // Nueva columna
                 fputcsv($output, $cabeceras, ';');
 
                 foreach ($datos['alumnos'] as $alumno) {
@@ -107,6 +132,7 @@ function tm_reportes_exportar_excel()
                             $fila[] = $nota;
                         }
                     }
+                    $fila[] = isset($alumno['nota_total_curso']) ? $alumno['nota_total_curso'] : '-';
                     fputcsv($output, $fila, ';');
                 }
             }
@@ -130,7 +156,9 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
     $mysqli->set_charset("utf8mb4");
     $prefix = TM_MOODLE_DB_PREFIX;
 
-    if ($vista === 'general' || $vista === 'individual') {
+    if ($vista === 'general') {
+        // FIX: completionstate IN (1, 2) para contar tanto "complete" como "complete_pass"
+        // FIX: GROUP BY u.id para evitar duplicados por múltiples métodos de enrolamiento
         $sql = "SELECT 
                     u.id as userid,
                     u.idnumber AS rut,
@@ -142,7 +170,7 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
                     (SELECT COUNT(cmc.id) 
                      FROM {$prefix}course_modules cm
                      JOIN {$prefix}course_modules_completion cmc ON cmc.coursemoduleid = cm.id
-                     WHERE cm.course = c.id AND cmc.userid = u.id AND cmc.completionstate = 1) AS actividades_completadas,
+                     WHERE cm.course = c.id AND cmc.userid = u.id AND cmc.completionstate IN (1, 2)) AS actividades_completadas,
                     (SELECT COUNT(cm.id) 
                      FROM {$prefix}course_modules cm
                      WHERE cm.course = c.id AND cm.completion > 0) AS total_actividades
@@ -152,7 +180,8 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
                 JOIN {$prefix}course c ON c.id = e.courseid
                 LEFT JOIN {$prefix}grade_items gi ON gi.courseid = c.id AND gi.itemtype = 'course'
                 LEFT JOIN {$prefix}grade_grades gg ON gg.itemid = gi.id AND gg.userid = u.id
-                WHERE c.id = ? AND u.deleted = 0";
+                WHERE c.id = ? AND u.deleted = 0
+                GROUP BY u.id";
 
         if ($stmt = $mysqli->prepare($sql)) {
             $stmt->bind_param("i", $curso_id);
@@ -178,7 +207,8 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
                 JOIN {$prefix}user_enrolments ue ON ue.userid = u.id
                 JOIN {$prefix}enrol e ON e.id = ue.enrolid
                 JOIN {$prefix}course c ON c.id = e.courseid
-                WHERE c.id = ? AND u.deleted = 0";
+                WHERE c.id = ? AND u.deleted = 0
+                GROUP BY u.id";
 
         if ($stmt = $mysqli->prepare($sql)) {
             $stmt->bind_param("i", $curso_id);
@@ -226,6 +256,22 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
             $stmt_notas->close();
         }
 
+        // Paso 2b: Traer la nota total del curso (itemtype = 'course')
+        $notas_totales = [];
+        $sql_total = "SELECT gg.userid, gg.finalgrade 
+                      FROM {$prefix}grade_grades gg
+                      JOIN {$prefix}grade_items gi ON gi.id = gg.itemid
+                      WHERE gi.courseid = ? AND gi.itemtype = 'course'";
+        if ($stmt_total = $mysqli->prepare($sql_total)) {
+            $stmt_total->bind_param("i", $curso_id);
+            $stmt_total->execute();
+            $res_total = $stmt_total->get_result();
+            while ($row_total = $res_total->fetch_assoc()) {
+                $notas_totales[$row_total['userid']] = round($row_total['finalgrade'], 1);
+            }
+            $stmt_total->close();
+        }
+
         $datos['actividades'] = $actividades;
         $datos['alumnos'] = [];
 
@@ -240,7 +286,8 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
                 JOIN {$prefix}user_enrolments ue ON ue.userid = u.id
                 JOIN {$prefix}enrol e ON e.id = ue.enrolid
                 JOIN {$prefix}course c ON c.id = e.courseid
-                WHERE c.id = ? AND u.deleted = 0";
+                WHERE c.id = ? AND u.deleted = 0
+                GROUP BY u.id";
 
         if ($stmt_alumnos = $mysqli->prepare($sql_alumnos)) {
             $stmt_alumnos->bind_param("i", $curso_id);
@@ -250,6 +297,7 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
             while ($alumno = $res_alumnos->fetch_assoc()) {
                 $userid = $alumno['userid'];
                 $alumno['notas_parciales'] = isset($notas_curso[$userid]) ? $notas_curso[$userid] : [];
+                $alumno['nota_total_curso'] = isset($notas_totales[$userid]) ? $notas_totales[$userid] : '-';
                 $datos['alumnos'][] = $alumno;
             }
             $stmt_alumnos->close();
@@ -274,6 +322,31 @@ function tm_reportes_moodle_render_page()
 
     // Si la vista es notas, alumnos está en $datos_reporte['alumnos'], de lo contrario en $datos_reporte
     $alumnos = ($vista_seleccionada === 'notas' && isset($datos_reporte['alumnos'])) ? $datos_reporte['alumnos'] : $datos_reporte;
+
+    // === APLICAR ORDENAMIENTO POR DEFECTO ===
+    if ($vista_seleccionada === 'general' && is_array($alumnos) && count($alumnos) > 1) {
+        usort($alumnos, function ($a, $b) {
+            return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
+        });
+    } elseif ($vista_seleccionada === 'accesos' && is_array($alumnos) && count($alumnos) > 1) {
+        usort($alumnos, function ($a, $b) {
+            $aAccess = intval($a['ultimo_acceso_unix']);
+            $bAccess = intval($b['ultimo_acceso_unix']);
+            // Nunca primero, luego por fecha ascendente (más inactivo arriba)
+            if ($aAccess === 0 && $bAccess === 0) {
+                return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
+            }
+            if ($aAccess === 0)
+                return -1;
+            if ($bAccess === 0)
+                return 1;
+            return $aAccess - $bAccess;
+        });
+    } elseif ($vista_seleccionada === 'notas' && is_array($alumnos) && count($alumnos) > 1) {
+        usort($alumnos, function ($a, $b) {
+            return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
+        });
+    }
     ?>
     <div class="wrap">
         <h1>📊 Sistema de Reportes</h1>
@@ -290,7 +363,8 @@ function tm_reportes_moodle_render_page()
                 form,
                 .btn-imprimir,
                 .update-nag,
-                .components-notice-list {
+                .components-notice-list,
+                .no-print {
                     display: none !important;
                 }
 
@@ -305,42 +379,6 @@ function tm_reportes_moodle_render_page()
                     background: #fff;
                     padding: 0;
                 }
-
-                /* Forzar saltos de página */
-                .ficha-alumno {
-                    page-break-after: always;
-                    padding: 20px;
-                    border: 1px solid #ccc;
-                    margin-bottom: 20px;
-                    border-radius: 8px;
-                }
-
-                .no-print {
-                    display: none !important;
-                }
-            }
-
-            .ficha-alumno {
-                background: #fff;
-                padding: 20px;
-                border: 1px solid #ddd;
-                margin-bottom: 20px;
-                border-radius: 8px;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            }
-
-            .ficha-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-            }
-
-            .ficha-titulo {
-                font-size: 1.2em;
-                font-weight: bold;
             }
 
             .progreso-container {
@@ -358,11 +396,98 @@ function tm_reportes_moodle_render_page()
                 border-radius: 6px;
                 transition: width 0.3s;
             }
+
+            /* Estilos del buscador de cursos */
+            .tm-curso-buscar-wrap {
+                position: relative;
+                display: inline-block;
+                margin-right: 15px;
+            }
+
+            .tm-curso-buscar-wrap input {
+                min-width: 250px;
+                padding: 5px 30px 5px 10px;
+                box-sizing: border-box;
+            }
+
+            .tm-curso-buscar-wrap .dashicons-search {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #999;
+                pointer-events: none;
+            }
+
+            /* Estilos de columnas sortables */
+            th.sortable {
+                cursor: pointer;
+                user-select: none;
+                position: relative;
+                padding-right: 22px !important;
+            }
+
+            th.sortable:hover {
+                background: #f0f0f1 !important;
+            }
+
+            th.sortable .sort-indicator {
+                position: absolute;
+                right: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 0.75em;
+                color: #999;
+            }
+
+            th.sortable[data-sort-dir="asc"] .sort-indicator {
+                color: #0073aa;
+            }
+
+            th.sortable[data-sort-dir="desc"] .sort-indicator {
+                color: #0073aa;
+            }
+
+            /* KPIs responsive */
+            .kpis-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+
+            .kpi-box {
+                flex: 1;
+                min-width: 180px;
+                background: #fff;
+                padding: 15px;
+                border-left: 4px solid #0073aa;
+                border-radius: 4px;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+
+            .kpi-box h4 {
+                margin: 0 0 5px 0;
+                font-size: 0.9em;
+                color: #666;
+            }
+
+            .kpi-box .kpi-value {
+                font-size: 24px;
+                font-weight: bold;
+            }
         </style>
 
         <form method="post"
             style="margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <label for="tm_curso_id" style="font-weight: bold; margin-right: 10px;">Selecciona el Curso:</label>
+
+            <!-- BUSCADOR DE CURSO + SELECT -->
+            <label for="tm_curso_buscar" style="font-weight: bold; margin-right: 10px;">Selecciona el Curso:</label>
+            <div class="tm-curso-buscar-wrap" style="margin-right: 15px;">
+                <input type="text" id="tm_curso_buscar" placeholder="Escriba para buscar curso..."
+                    onkeyup="tmFiltrarCursos()" autocomplete="off" />
+                <span class="dashicons dashicons-search"></span>
+            </div>
             <select name="tm_curso_id" id="tm_curso_id" style="min-width: 250px; padding: 5px; margin-right: 15px;">
                 <option value="">-- Seleccione un Curso --</option>
                 <?php foreach ($cursos as $curso): ?>
@@ -374,10 +499,8 @@ function tm_reportes_moodle_render_page()
 
             <label for="tm_tipo_reporte" style="font-weight: bold; margin-right: 10px;">Tipo de Informe:</label>
             <select name="tm_tipo_reporte" id="tm_tipo_reporte" style="min-width: 250px; padding: 5px;">
-                <option value="general" <?php selected($vista_seleccionada, 'general'); ?>>Informe General de Avance (PDF)
-                </option>
-                <option value="individual" <?php selected($vista_seleccionada, 'individual'); ?>>Fichas de Progreso
-                    Individuales (PDF)</option>
+                <option value="general" <?php selected($vista_seleccionada, 'general'); ?>>Informe General de Avance
+                    (PDF)</option>
                 <option value="notas" <?php selected($vista_seleccionada, 'notas'); ?>>Matriz de Calificaciones Parciales
                     (Excel)</option>
                 <option value="accesos" <?php selected($vista_seleccionada, 'accesos'); ?>>Auditoría de Últimos Accesos
@@ -387,7 +510,7 @@ function tm_reportes_moodle_render_page()
             <?php submit_button('Generar Reporte', 'primary', 'submit', false, ['style' => 'margin-left: 10px; vertical-align: top;']); ?>
 
             <?php if ($curso_seleccionado > 0): ?>
-                <?php if (in_array($vista_seleccionada, ['general', 'individual'])): ?>
+                <?php if ($vista_seleccionada === 'general'): ?>
                     <button type="button" class="button button-secondary btn-imprimir" onclick="window.print()"
                         style="margin-left: 10px; vertical-align: top;"><span class="dashicons dashicons-printer"></span> Imprimir
                         PDF</button>
@@ -404,50 +527,76 @@ function tm_reportes_moodle_render_page()
 
             <?php if ($vista_seleccionada === 'general'): ?>
                 <!-- Vista: General -->
-                <div class="kpis-container" style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <div class="kpis-container">
                     <?php
                     $suma_notas = 0;
                     $suma_progreso = 0;
                     $alumnos_criticos = 0;
+                    $total_ingresaron = 0;
+                    $total_nunca = 0;
+                    $total_100 = 0;
                     $total_alumnos = count($alumnos);
                     if ($total_alumnos > 0) {
                         foreach ($alumnos as $al) {
                             $suma_notas += floatval($al['nota_final']);
                             $suma_progreso += floatval($al['progreso']);
-                            if ($al['ultimo_acceso_unix'] == 0 || (time() - $al['ultimo_acceso_unix']) / DAY_IN_SECONDS > 7) {
-                                $alumnos_criticos++;
+                            if ($al['ultimo_acceso_unix'] == 0) {
+                                $total_nunca++;
+                            } else {
+                                $total_ingresaron++;
+                                if ((time() - $al['ultimo_acceso_unix']) / DAY_IN_DAYS > 7) {
+                                    $alumnos_criticos++;
+                                }
+                            }
+                            if (floatval($al['progreso']) >= 100) {
+                                $total_100++;
                             }
                         }
                     }
                     ?>
-                    <div
-                        style="flex: 1; background: #fff; padding: 15px; border-left: 4px solid #0073aa; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                        <h4 style="margin: 0 0 5px 0;">Promedio General</h4>
+                    <div class="kpi-box" style="border-left-color: #0073aa;">
+                        <h4>Promedio General</h4>
                         <span
-                            style="font-size: 24px; font-weight: bold;"><?php echo $total_alumnos > 0 ? round($suma_notas / $total_alumnos, 1) : 0; ?></span>
+                            class="kpi-value"><?php echo $total_alumnos > 0 ? round($suma_notas / $total_alumnos, 1) : 0; ?></span>
                     </div>
-                    <div
-                        style="flex: 1; background: #fff; padding: 15px; border-left: 4px solid #46b450; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                        <h4 style="margin: 0 0 5px 0;">Avance del Grupo</h4>
+                    <div class="kpi-box" style="border-left-color: #46b450;">
+                        <h4>Avance del Grupo</h4>
                         <span
-                            style="font-size: 24px; font-weight: bold;"><?php echo $total_alumnos > 0 ? round($suma_progreso / $total_alumnos, 1) : 0; ?>%</span>
+                            class="kpi-value"><?php echo $total_alumnos > 0 ? round($suma_progreso / $total_alumnos, 1) : 0; ?>%</span>
                     </div>
-                    <div
-                        style="flex: 1; background: #fff; padding: 15px; border-left: 4px solid #dc3232; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                        <h4 style="margin: 0 0 5px 0;">Alumnos en Riesgo</h4>
-                        <span style="font-size: 24px; font-weight: bold;"><?php echo $alumnos_criticos; ?></span>
+                    <div class="kpi-box" style="border-left-color: #00a32a;">
+                        <h4>Alumnos que Ingresaron</h4>
+                        <span class="kpi-value"><?php echo $total_ingresaron; ?></span>
+                    </div>
+                    <div class="kpi-box" style="border-left-color: #dc3232;">
+                        <h4>Nunca han Ingresado</h4>
+                        <span class="kpi-value"><?php echo $total_nunca; ?></span>
+                    </div>
+                    <div class="kpi-box" style="border-left-color: #2270b1;">
+                        <h4>Con Progreso 100%</h4>
+                        <span class="kpi-value"><?php echo $total_100; ?></span>
+                    </div>
+                    <div class="kpi-box" style="border-left-color: #dba617;">
+                        <h4>Alumnos en Riesgo (>7d)</h4>
+                        <span class="kpi-value"><?php echo $alumnos_criticos; ?></span>
                     </div>
                 </div>
 
-                <table class="wp-list-table widefat fixed striping">
+                <table class="wp-list-table widefat fixed striping" id="tabla-general">
                     <thead>
                         <tr>
-                            <th>RUT</th>
-                            <th>Alumno</th>
-                            <th>Correo</th>
-                            <th>% Progreso</th>
-                            <th>Nota Final</th>
-                            <th>Estado de Alerta</th>
+                            <th class="sortable" data-sort-type="text" onclick="tmSortTable(this)">RUT <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="text" data-sort-dir="asc" onclick="tmSortTable(this)">Alumno <span
+                                    class="sort-indicator">▲</span></th>
+                            <th class="sortable" data-sort-type="text" onclick="tmSortTable(this)">Correo <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">% Progreso <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">Nota Final <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">Estado de Alerta <span
+                                    class="sort-indicator">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -459,90 +608,70 @@ function tm_reportes_moodle_render_page()
                             <?php foreach ($alumnos as $alumno):
                                 $alerta = '🟢 Activo';
                                 $estilo_alerta = 'color: #46b450; font-weight: bold;';
-
+                                $alerta_sort = 3; // Para sorting numérico
+            
                                 if ($alumno['ultimo_acceso_unix'] == 0) {
                                     $alerta = '🔴 Nunca ha ingresado';
                                     $estilo_alerta = 'color: #dc3232; font-weight: bold;';
+                                    $alerta_sort = 0;
                                 } else {
                                     $dias_inactivo = (time() - $alumno['ultimo_acceso_unix']) / DAY_IN_SECONDS;
                                     if ($dias_inactivo > 7) {
                                         $alerta = '🔴 En Riesgo (>7d)';
                                         $estilo_alerta = 'color: #dc3232; font-weight: bold;';
+                                        $alerta_sort = 1;
                                     } elseif ($dias_inactivo > 3) {
                                         $alerta = '🟡 Ausente (>3d)';
                                         $estilo_alerta = 'color: #ffb900; font-weight: bold;';
+                                        $alerta_sort = 2;
                                     }
                                 }
                                 ?>
                                 <tr>
-                                    <td><?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
-                                    <td><?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['rut']); ?>">
+                                        <?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['nombre'] . ' ' . $alumno['apellido']); ?>">
+                                        <?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
                                     <td><?php echo esc_html($alumno['correo']); ?></td>
-                                    <td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['progreso']); ?>">
                                         <strong><?php echo $alumno['progreso']; ?>%</strong>
                                         <div class="progreso-container">
-                                            <div class="progreso-barra" style="width: <?php echo $alumno['progreso']; ?>%;"></div>
+                                            <div class="progreso-barra"
+                                                style="width: <?php echo $alumno['progreso']; ?>%; <?php echo ($alumno['progreso'] >= 100) ? 'background: #46b450;' : ''; ?>">
+                                            </div>
                                         </div>
                                     </td>
-                                    <td><strong><?php echo $alumno['nota_final'] ? $alumno['nota_final'] : '0.0'; ?></strong></td>
-                                    <td style="<?php echo $estilo_alerta; ?>"><?php echo $alerta; ?></td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['nota_final'] ? $alumno['nota_final'] : '0'); ?>">
+                                        <strong><?php echo $alumno['nota_final'] ? $alumno['nota_final'] : '0.0'; ?></strong></td>
+                                    <td data-sort-value="<?php echo $alerta_sort; ?>" style="<?php echo $estilo_alerta; ?>">
+                                        <?php echo $alerta; ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
 
-            <?php elseif ($vista_seleccionada === 'individual'): ?>
-                <!-- Vista: Individual -->
-                <?php if (empty($alumnos)): ?>
-                    <p>No hay alumnos matriculados en este curso.</p>
-                <?php else: ?>
-                    <div style="max-width: 800px; margin: 0 auto;">
-                        <?php foreach ($alumnos as $alumno): ?>
-                            <div class="ficha-alumno">
-                                <div class="ficha-header">
-                                    <div class="ficha-titulo"><?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></div>
-                                    <div><strong>RUT:</strong> <?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></div>
-                                </div>
-                                <div style="margin-bottom: 15px;">
-                                    <strong>Correo:</strong> <?php echo esc_html($alumno['correo']); ?> <br />
-                                    <strong>Nota Final Actual:</strong> <span
-                                        style="font-size: 1.2em; color: #0073aa; font-weight: bold;"><?php echo $alumno['nota_final'] ? $alumno['nota_final'] : '0.0'; ?></span>
-                                </div>
-                                <div>
-                                    <strong>Progreso del Curso: <?php echo $alumno['progreso']; ?>%</strong>
-                                    (<?php echo $alumno['actividades_completadas']; ?>/<?php echo $alumno['total_actividades']; ?>
-                                    actividades)
-                                    <div class="progreso-container" style="height: 18px; border-radius: 9px;">
-                                        <div class="progreso-barra"
-                                            style="width: <?php echo $alumno['progreso']; ?>%; height: 18px; border-radius: 9px; background: <?php echo ($alumno['progreso'] == 100) ? '#46b450' : '#0073aa'; ?>;">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style="margin-top: 15px; font-size: 0.9em; color: #666;">
-                                    <em>Último acceso al curso:
-                                        <?php echo ($alumno['ultimo_acceso_unix'] > 0) ? date_i18n('d-m-Y H:i', $alumno['ultimo_acceso_unix']) : 'Nunca'; ?></em>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
             <?php elseif ($vista_seleccionada === 'notas'): ?>
                 <!-- Vista: Notas -->
                 <div style="overflow-x: auto;">
-                    <table class="wp-list-table widefat fixed striping" style="min-width: 1000px;">
+                    <table class="wp-list-table widefat fixed striping" style="min-width: 1000px;" id="tabla-notas">
                         <thead>
                             <tr>
-                                <th style="width: 10%;">RUT</th>
-                                <th style="width: 15%;">Alumno</th>
+                                <th class="sortable" data-sort-type="text" style="width: 10%;" onclick="tmSortTable(this)">RUT <span
+                                        class="sort-indicator">⇅</span></th>
+                                <th class="sortable" data-sort-type="text" data-sort-dir="asc" style="width: 15%;"
+                                    onclick="tmSortTable(this)">Alumno <span class="sort-indicator">▲</span></th>
                                 <?php if (!empty($datos_reporte['actividades'])): ?>
                                     <?php foreach ($datos_reporte['actividades'] as $act_name): ?>
-                                        <th style="width: auto;"><?php echo esc_html($act_name); ?></th>
+                                        <th class="sortable" data-sort-type="number" style="width: auto;" onclick="tmSortTable(this)">
+                                            <?php echo esc_html($act_name); ?> <span class="sort-indicator">⇅</span></th>
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <th>Sin actividades calificables evaluadas</th>
                                 <?php endif; ?>
+                                <th class="sortable" data-sort-type="number"
+                                    style="width: auto; background: #f0f0f1; font-weight: bold;" onclick="tmSortTable(this)">Total
+                                    del Curso <span class="sort-indicator">⇅</span></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -553,16 +682,24 @@ function tm_reportes_moodle_render_page()
                             <?php else: ?>
                                 <?php foreach ($alumnos as $alumno): ?>
                                     <tr>
-                                        <td><?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
-                                        <td><?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
+                                        <td data-sort-value="<?php echo esc_attr($alumno['rut']); ?>">
+                                            <?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
+                                        <td data-sort-value="<?php echo esc_attr($alumno['nombre'] . ' ' . $alumno['apellido']); ?>">
+                                            <?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
                                         <?php if (!empty($datos_reporte['actividades'])): ?>
                                             <?php foreach ($datos_reporte['actividades'] as $act_id => $act_name): ?>
-                                                <td><?php echo isset($alumno['notas_parciales'][$act_id]) ? esc_html($alumno['notas_parciales'][$act_id]) : '-'; ?>
+                                                <?php $nota_val = isset($alumno['notas_parciales'][$act_id]) ? $alumno['notas_parciales'][$act_id] : '-'; ?>
+                                                <td data-sort-value="<?php echo is_numeric($nota_val) ? esc_attr($nota_val) : '-1'; ?>">
+                                                    <?php echo esc_html($nota_val); ?>
                                                 </td>
                                             <?php endforeach; ?>
                                         <?php else: ?>
                                             <td>-</td>
                                         <?php endif; ?>
+                                        <td data-sort-value="<?php echo is_numeric($alumno['nota_total_curso']) ? esc_attr($alumno['nota_total_curso']) : '-1'; ?>"
+                                            style="font-weight: bold; background: #f9f9f9;">
+                                            <?php echo esc_html($alumno['nota_total_curso']); ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -572,13 +709,17 @@ function tm_reportes_moodle_render_page()
 
             <?php elseif ($vista_seleccionada === 'accesos'): ?>
                 <!-- Vista: Accesos -->
-                <table class="wp-list-table widefat fixed striping">
+                <table class="wp-list-table widefat fixed striping" id="tabla-accesos">
                     <thead>
                         <tr>
-                            <th>RUT</th>
-                            <th>Alumno</th>
-                            <th>Correo</th>
-                            <th>Último Acceso</th>
+                            <th class="sortable" data-sort-type="text" onclick="tmSortTable(this)">RUT <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="text" onclick="tmSortTable(this)">Alumno <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="text" onclick="tmSortTable(this)">Correo <span
+                                    class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-sort-type="number" data-sort-dir="asc" onclick="tmSortTable(this)">Último
+                                Acceso <span class="sort-indicator">▲</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -589,10 +730,12 @@ function tm_reportes_moodle_render_page()
                         <?php else: ?>
                             <?php foreach ($alumnos as $alumno): ?>
                                 <tr>
-                                    <td><?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
-                                    <td><?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['rut']); ?>">
+                                        <?php echo esc_html($alumno['rut'] ? $alumno['rut'] : 'N/A'); ?></td>
+                                    <td data-sort-value="<?php echo esc_attr($alumno['nombre'] . ' ' . $alumno['apellido']); ?>">
+                                        <?php echo esc_html($alumno['nombre'] . ' ' . $alumno['apellido']); ?></td>
                                     <td><?php echo esc_html($alumno['correo']); ?></td>
-                                    <td>
+                                    <td data-sort-value="<?php echo intval($alumno['ultimo_acceso_unix']); ?>">
                                         <?php
                                         if ($alumno['ultimo_acceso_humano'] === 'Nunca') {
                                             echo '<span style="color: #dc3232; font-weight: bold;">Nunca</span>';
@@ -611,5 +754,78 @@ function tm_reportes_moodle_render_page()
 
         <?php endif; ?>
     </div>
+
+    <script>
+        // === BUSCADOR DE CURSOS ===
+        function tmFiltrarCursos() {
+            var input = document.getElementById('tm_curso_buscar');
+            var filter = input.value.toUpperCase();
+            var select = document.getElementById('tm_curso_id');
+            var options = select.getElementsByTagName('option');
+
+            for (var i = 0; i < options.length; i++) {
+                if (options[i].value === '') continue; // Mantener el placeholder
+                var txt = options[i].textContent || options[i].innerText;
+                if (txt.toUpperCase().indexOf(filter) > -1) {
+                    options[i].style.display = '';
+                } else {
+                    options[i].style.display = 'none';
+                }
+            }
+        }
+
+        // === SORTABLE TABLES ===
+        function tmSortTable(thElement) {
+            var table = thElement.closest('table');
+            if (!table) return;
+
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Saltar si hay mensaje vacío (colspan)
+            if (rows.length === 0) return;
+            if (rows[0].cells.length === 1 && rows[0].cells[0].colSpan > 1) return;
+
+            var thIndex = Array.from(thElement.parentNode.children).indexOf(thElement);
+            var sortType = thElement.dataset.sortType || 'text';
+            var currentDir = thElement.dataset.sortDir || '';
+            var newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+            // Reset visual indicators
+            thElement.parentNode.querySelectorAll('th.sortable').forEach(function (th) {
+                th.dataset.sortDir = '';
+                var ind = th.querySelector('.sort-indicator');
+                if (ind) ind.textContent = '⇅';
+            });
+
+            // Set new direction
+            thElement.dataset.sortDir = newDir;
+            var indicator = thElement.querySelector('.sort-indicator');
+            if (indicator) indicator.textContent = newDir === 'asc' ? '▲' : '▼';
+
+            rows.sort(function (a, b) {
+                var aCell = a.cells[thIndex];
+                var bCell = b.cells[thIndex];
+
+                var aVal = aCell.dataset.sortValue !== undefined ? aCell.dataset.sortValue : aCell.textContent.trim();
+                var bVal = bCell.dataset.sortValue !== undefined ? bCell.dataset.sortValue : bCell.textContent.trim();
+
+                if (sortType === 'number') {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                // Text comparison
+                return newDir === 'asc'
+                    ? aVal.localeCompare(bVal, 'es', { numeric: true, sensitivity: 'base' })
+                    : bVal.localeCompare(aVal, 'es', { numeric: true, sensitivity: 'base' });
+            });
+
+            rows.forEach(function (row) { tbody.appendChild(row); });
+        }
+    </script>
     <?php
 }
