@@ -56,7 +56,7 @@ function tm_reportes_obtener_cursos_moodle()
     return $cursos;
 }
 
-// Hook para procesar la exportación a Excel antes de enviar headers
+// Hook para procesar la exportación a Excel / CSV antes de enviar headers
 add_action('admin_init', 'tm_reportes_exportar_excel');
 function tm_reportes_exportar_excel()
 {
@@ -64,7 +64,7 @@ function tm_reportes_exportar_excel()
         $curso_seleccionado = intval($_POST['tm_curso_id']);
         $vista_seleccionada = sanitize_text_field($_POST['tm_tipo_reporte']);
 
-        if ($curso_seleccionado > 0 && in_array($vista_seleccionada, ['notas', 'accesos'])) {
+        if ($curso_seleccionado > 0 && in_array($vista_seleccionada, ['notas', 'accesos', 'general'])) {
             $datos = tm_reportes_obtener_datos_curso($curso_seleccionado, $vista_seleccionada);
 
             // Aplicar ordenamiento por defecto en el export
@@ -81,6 +81,10 @@ function tm_reportes_exportar_excel()
                     if ($bAccess === 0)
                         return 1;
                     return $aAccess - $bAccess;
+                });
+            } elseif ($vista_seleccionada === 'general' && is_array($datos)) {
+                usort($datos, function ($a, $b) {
+                    return strcasecmp($a['nombre'] . ' ' . $a['apellido'], $b['nombre'] . ' ' . $b['apellido']);
                 });
             }
 
@@ -100,6 +104,33 @@ function tm_reportes_exportar_excel()
                         $alumno['apellido'],
                         $alumno['correo'],
                         $alumno['ultimo_acceso_humano']
+                    ], ';');
+                }
+            } elseif ($vista_seleccionada === 'general') {
+                fputcsv($output, ['RUT', 'Nombre', 'Apellido', 'Correo', '% Progreso', 'Nota Final', 'Estado de Alerta', 'Ultimo Acceso'], ';');
+                foreach ($datos as $alumno) {
+                    $alerta = 'Activo';
+                    $acceso_str = 'Nunca';
+                    if (intval($alumno['ultimo_acceso_unix']) == 0) {
+                        $alerta = 'Nunca ha ingresado';
+                    } else {
+                        $acceso_str = date_i18n('d-m-Y H:i', intval($alumno['ultimo_acceso_unix']));
+                        $dias_inactivo = (time() - intval($alumno['ultimo_acceso_unix'])) / DAY_IN_SECONDS;
+                        if ($dias_inactivo > 7) {
+                            $alerta = 'En Riesgo (>7d)';
+                        } elseif ($dias_inactivo > 3) {
+                            $alerta = 'Ausente (>3d)';
+                        }
+                    }
+                    fputcsv($output, [
+                        $alumno['rut'] ? $alumno['rut'] : 'N/A',
+                        $alumno['nombre'],
+                        $alumno['apellido'],
+                        $alumno['correo'],
+                        $alumno['progreso'] . '%',
+                        $alumno['nota_final'] ? $alumno['nota_final'] : '0.0',
+                        $alerta,
+                        $acceso_str
                     ], ';');
                 }
             } elseif ($vista_seleccionada === 'notas') {
@@ -157,44 +188,94 @@ function tm_reportes_obtener_datos_curso($curso_id, $vista = 'general')
     $prefix = TM_MOODLE_DB_PREFIX;
 
     if ($vista === 'general') {
-        // FIX: completionstate IN (1, 2) para contar tanto "complete" como "complete_pass"
-        // FIX: GROUP BY u.id para evitar duplicados por múltiples métodos de enrolamiento
-        $sql = "SELECT 
+        // 1. Consulta base de alumnos (idéntica y 100% compatible con accesos y notas)
+        $sql_alumnos = "SELECT 
                     u.id as userid,
                     u.idnumber AS rut,
                     u.firstname AS nombre,
                     u.lastname AS apellido,
                     u.email AS correo,
-                    u.lastaccess AS ultimo_acceso_unix,
-                    ROUND(gg.finalgrade, 1) AS nota_final,
-                    (SELECT COUNT(cmc.id) 
-                     FROM {$prefix}course_modules cm
-                     JOIN {$prefix}course_modules_completion cmc ON cmc.coursemoduleid = cm.id
-                     WHERE cm.course = c.id AND cmc.userid = u.id AND cmc.completionstate IN (1, 2)) AS actividades_completadas,
-                    (SELECT COUNT(cm.id) 
-                     FROM {$prefix}course_modules cm
-                     WHERE cm.course = c.id AND cm.completion > 0) AS total_actividades
+                    u.lastaccess AS ultimo_acceso_unix
                 FROM {$prefix}user u
                 JOIN {$prefix}user_enrolments ue ON ue.userid = u.id
                 JOIN {$prefix}enrol e ON e.id = ue.enrolid
                 JOIN {$prefix}course c ON c.id = e.courseid
-                LEFT JOIN {$prefix}grade_items gi ON gi.courseid = c.id AND gi.itemtype = 'course'
-                LEFT JOIN {$prefix}grade_grades gg ON gg.itemid = gi.id AND gg.userid = u.id
                 WHERE c.id = ? AND u.deleted = 0
                 GROUP BY u.id";
 
-        if ($stmt = $mysqli->prepare($sql)) {
+        $alumnos_map = [];
+        if ($stmt = $mysqli->prepare($sql_alumnos)) {
             $stmt->bind_param("i", $curso_id);
             $stmt->execute();
             $result = $stmt->get_result();
-
             while ($row = $result->fetch_assoc()) {
-                $total = intval($row['total_actividades']);
-                $comp = intval($row['actividades_completadas']);
-                $row['progreso'] = ($total > 0) ? round(($comp / $total) * 100, 1) : 0;
-                $datos[] = $row;
+                $row['actividades_completadas'] = 0;
+                $row['nota_final'] = '0.0';
+                $alumnos_map[$row['userid']] = $row;
             }
             $stmt->close();
+        } else {
+            error_log("Error en consulta base general de alumnos: " . $mysqli->error);
+        }
+
+        if (!empty($alumnos_map)) {
+            // 2. Obtener total de actividades del curso que requieren completitud
+            $total_actividades = 0;
+            $sql_tot_act = "SELECT COUNT(id) AS total FROM {$prefix}course_modules WHERE course = ? AND completion > 0";
+            if ($stmt_tot = $mysqli->prepare($sql_tot_act)) {
+                $stmt_tot->bind_param("i", $curso_id);
+                $stmt_tot->execute();
+                $res_tot = $stmt_tot->get_result();
+                if ($r = $res_tot->fetch_assoc()) {
+                    $total_actividades = intval($r['total']);
+                }
+                $stmt_tot->close();
+            }
+
+            // 3. Obtener conteo de actividades completadas por alumno en este curso
+            $sql_comp = "SELECT cmc.userid, COUNT(cmc.id) AS comp_count
+                         FROM {$prefix}course_modules cm
+                         JOIN {$prefix}course_modules_completion cmc ON cmc.coursemoduleid = cm.id
+                         WHERE cm.course = ? AND cmc.completionstate IN (1, 2)
+                         GROUP BY cmc.userid";
+            if ($stmt_comp = $mysqli->prepare($sql_comp)) {
+                $stmt_comp->bind_param("i", $curso_id);
+                $stmt_comp->execute();
+                $res_comp = $stmt_comp->get_result();
+                while ($r = $res_comp->fetch_assoc()) {
+                    $uid = $r['userid'];
+                    if (isset($alumnos_map[$uid])) {
+                        $alumnos_map[$uid]['actividades_completadas'] = intval($r['comp_count']);
+                    }
+                }
+                $stmt_comp->close();
+            }
+
+            // 4. Obtener nota final del curso por alumno (itemtype = 'course')
+            $sql_notas = "SELECT gg.userid, gg.finalgrade 
+                          FROM {$prefix}grade_grades gg
+                          JOIN {$prefix}grade_items gi ON gi.id = gg.itemid
+                          WHERE gi.courseid = ? AND gi.itemtype = 'course'";
+            if ($stmt_n = $mysqli->prepare($sql_notas)) {
+                $stmt_n->bind_param("i", $curso_id);
+                $stmt_n->execute();
+                $res_n = $stmt_n->get_result();
+                while ($r = $res_n->fetch_assoc()) {
+                    $uid = $r['userid'];
+                    if (isset($alumnos_map[$uid])) {
+                        $alumnos_map[$uid]['nota_final'] = ($r['finalgrade'] !== null) ? round($r['finalgrade'], 1) : '0.0';
+                    }
+                }
+                $stmt_n->close();
+            }
+
+            // 5. Calcular porcentaje de progreso y armar array final
+            foreach ($alumnos_map as $row) {
+                $comp = intval($row['actividades_completadas']);
+                $row['total_actividades'] = $total_actividades;
+                $row['progreso'] = ($total_actividades > 0) ? round(($comp / $total_actividades) * 100, 1) : 0;
+                $datos[] = $row;
+            }
         }
     } elseif ($vista === 'accesos') {
         $sql = "SELECT 
@@ -316,7 +397,14 @@ function tm_reportes_moodle_render_page()
     $vista_seleccionada = isset($_POST['tm_tipo_reporte']) ? sanitize_text_field($_POST['tm_tipo_reporte']) : 'general';
     $datos_reporte = [];
 
+    $nombre_curso_seleccionado = '';
     if ($curso_seleccionado > 0) {
+        foreach ($cursos as $c) {
+            if ($c['id'] == $curso_seleccionado) {
+                $nombre_curso_seleccionado = $c['fullname'];
+                break;
+            }
+        }
         $datos_reporte = tm_reportes_obtener_datos_curso($curso_seleccionado, $vista_seleccionada);
     }
 
@@ -349,14 +437,23 @@ function tm_reportes_moodle_render_page()
     }
     ?>
     <div class="wrap">
-        <h1>📊 Sistema de Reportes</h1>
-        <p>Elige el curso, el tipo de reporte y revisa los resultados en tiempo real.</p>
-        <hr />
+        <h1 class="no-print">📊 Sistema de Reportes</h1>
+        <p class="no-print">Elige el curso, el tipo de reporte y revisa los resultados en tiempo real.</p>
+        <hr class="no-print" />
 
         <style>
-            @media print {
+            .tm-print-header {
+                display: none;
+            }
 
-                /* Ocultar todo el entorno de WordPress */
+            @media print {
+                /* Preservar colores exactos en la generación/impresión de PDF */
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+
+                /* Ocultar elementos de entorno de WordPress */
                 #adminmenumain,
                 #wpadminbar,
                 .notice,
@@ -364,11 +461,21 @@ function tm_reportes_moodle_render_page()
                 .btn-imprimir,
                 .update-nag,
                 .components-notice-list,
-                .no-print {
+                .no-print,
+                .sort-indicator,
+                .dashicons {
                     display: none !important;
                 }
 
-                /* Ajustar el contenedor principal */
+                /* Encabezado limpio para el reporte PDF impreso */
+                .tm-print-header {
+                    display: block !important;
+                    margin-bottom: 20px;
+                    border-bottom: 2px solid #0073aa;
+                    padding-bottom: 10px;
+                }
+
+                /* Ajustar contenedor principal */
                 #wpcontent,
                 #wpbody {
                     margin-left: 0 !important;
@@ -378,6 +485,10 @@ function tm_reportes_moodle_render_page()
                 .wrap {
                     background: #fff;
                     padding: 0;
+                }
+
+                tr {
+                    page-break-inside: avoid;
                 }
             }
 
@@ -478,6 +589,18 @@ function tm_reportes_moodle_render_page()
             }
         </style>
 
+        <?php if ($curso_seleccionado > 0): ?>
+            <div class="tm-print-header">
+                <h2 style="margin: 0 0 5px 0; color: #0073aa; font-size: 20px;">TM Capacitación - Reporte de Curso</h2>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">Curso: <?php echo esc_html($nombre_curso_seleccionado); ?></h3>
+                <p style="margin: 0; font-size: 12px; color: #666;">
+                    <strong>Tipo de Reporte:</strong> <?php echo ($vista_seleccionada === 'general') ? 'Informe General de Avance' : (($vista_seleccionada === 'notas') ? 'Matriz de Calificaciones Parciales' : 'Auditoría de Últimos Accesos'); ?> | 
+                    <strong>Fecha de Emisión:</strong> <?php echo date_i18n('d-m-Y H:i'); ?> | 
+                    <strong>Total Alumnos:</strong> <?php echo count($alumnos); ?>
+                </p>
+            </div>
+        <?php endif; ?>
+
         <form method="post"
             style="margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
 
@@ -510,15 +633,12 @@ function tm_reportes_moodle_render_page()
             <?php submit_button('Generar Reporte', 'primary', 'submit', false, ['style' => 'margin-left: 10px; vertical-align: top;']); ?>
 
             <?php if ($curso_seleccionado > 0): ?>
-                <?php if ($vista_seleccionada === 'general'): ?>
-                    <button type="button" class="button button-secondary btn-imprimir" onclick="window.print()"
-                        style="margin-left: 10px; vertical-align: top;"><span class="dashicons dashicons-printer"></span> Imprimir
-                        PDF</button>
-                <?php else: ?>
-                    <button type="submit" name="download_excel" value="1" class="button button-secondary btn-imprimir"
-                        style="margin-left: 10px; vertical-align: top;"><span class="dashicons dashicons-media-spreadsheet"></span>
-                        Descargar Excel</button>
-                <?php endif; ?>
+                <button type="button" class="button button-secondary btn-imprimir" onclick="window.print()"
+                    style="margin-left: 10px; vertical-align: top;"><span class="dashicons dashicons-printer"></span> Imprimir
+                    PDF</button>
+                <button type="submit" name="download_excel" value="1" class="button button-secondary btn-imprimir"
+                    style="margin-left: 10px; vertical-align: top;"><span class="dashicons dashicons-media-spreadsheet"></span>
+                    Descargar Excel / CSV</button>
             <?php endif; ?>
         </form>
 
@@ -544,7 +664,7 @@ function tm_reportes_moodle_render_page()
                                 $total_nunca++;
                             } else {
                                 $total_ingresaron++;
-                                if ((time() - $al['ultimo_acceso_unix']) / DAY_IN_DAYS > 7) {
+                                if ((time() - $al['ultimo_acceso_unix']) / DAY_IN_SECONDS > 7) {
                                     $alumnos_criticos++;
                                 }
                             }
