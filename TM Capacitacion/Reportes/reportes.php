@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TM Capacitación - Reportes Avanzados Moodle
- * Description: Panel de administración para consultar y descargar reportes detallados de alumnos desde la BD local de Moodle.
- * Version: 2.0.0
+ * Description: Panel de administración para consultar, descargar y automatizar el envío de reportes de alumnos desde la BD local de Moodle.
+ * Version: 3.0.0
  * Author: Solvitu
  * License: GPL2
  */
@@ -11,18 +11,114 @@ if (!defined('ABSPATH')) {
     exit; // Prevenir acceso directo
 }
 
-// 1. Crear el menú en el Panel de Administración de WordPress
+// Definir constantes del plugin
+define('TM_REPORTES_VERSION', '3.0.0');
+define('TM_REPORTES_PATH', plugin_dir_path(__FILE__));
+define('TM_REPORTES_URL', plugin_dir_url(__FILE__));
+
+// === CARGAR MÓDULOS DE AUTOMATIZACIÓN ===
+require_once TM_REPORTES_PATH . 'includes/class-db.php';
+require_once TM_REPORTES_PATH . 'includes/class-scheduler.php';
+require_once TM_REPORTES_PATH . 'includes/class-mailer.php';
+require_once TM_REPORTES_PATH . 'includes/class-admin-config.php';
+require_once TM_REPORTES_PATH . 'includes/class-admin-panel.php';
+
+// === HOOK DE ACTIVACIÓN: Crear tablas y registrar cron ===
+register_activation_hook(__FILE__, 'tm_reportes_activar');
+function tm_reportes_activar()
+{
+    // Crear tablas de automatización
+    $db = TM_Reportes_DB::get_instance();
+    $db->crear_tablas();
+
+    // Registrar WP-Cron
+    $scheduler = new TM_Reportes_Scheduler();
+    $scheduler->activar_cron();
+}
+
+// === HOOK DE DESACTIVACIÓN: Eliminar cron ===
+register_deactivation_hook(__FILE__, 'tm_reportes_desactivar');
+function tm_reportes_desactivar()
+{
+    $scheduler = new TM_Reportes_Scheduler();
+    $scheduler->desactivar_cron();
+}
+
+// === INICIALIZAR SCHEDULER (cron hook + intervalo) ===
+$scheduler_init = new TM_Reportes_Scheduler();
+$scheduler_init->init();
+
+// === FALLBACK: Crear tablas y cron si no se ejecutó el activation hook ===
+// (cuando el plugin se actualiza copiando archivos en vez de activarlo desde WP)
+add_action('admin_init', 'tm_reportes_verificar_instalacion');
+function tm_reportes_verificar_instalacion()
+{
+    $version_instalada = get_option('tm_reportes_db_version', '0');
+
+    if ($version_instalada !== TM_REPORTES_VERSION) {
+        // Crear/actualizar tablas
+        $db = TM_Reportes_DB::get_instance();
+        $db->crear_tablas();
+
+        // Asegurar que el cron esté registrado
+        $scheduler = new TM_Reportes_Scheduler();
+        $scheduler->activar_cron();
+    }
+}
+
+// 1. Crear el menú y submenús en el Panel de Administración de WordPress
 add_action('admin_menu', 'tm_reportes_moodle_menu');
 function tm_reportes_moodle_menu()
 {
+    // Menú principal: Reportes
     add_menu_page(
         'Reportes Moodle',
         'Rep. Moodle',
-        'manage_options', // Solo Administradores
+        'manage_options',
         'tm-reportes-moodle',
         'tm_reportes_moodle_render_page',
         'dashicons-analytics',
         25
+    );
+
+    // Submenú: Reportes (mismo que el principal, para que aparezca como primer item)
+    add_submenu_page(
+        'tm-reportes-moodle',
+        'Generar Reportes',
+        '📊 Generar Reportes',
+        'manage_options',
+        'tm-reportes-moodle',
+        'tm_reportes_moodle_render_page'
+    );
+
+    // Submenú: Configuración de Coordinadores
+    add_submenu_page(
+        'tm-reportes-moodle',
+        'Configuración de Coordinadores',
+        '⚙️ Configuración',
+        'manage_options',
+        'tm-reportes-config',
+        ['TM_Reportes_Admin_Config', 'render_static']
+    );
+
+    // Submenú: Panel de Programación
+    add_submenu_page(
+        'tm-reportes-moodle',
+        'Panel de Programación',
+        '📅 Programación',
+        'manage_options',
+        'tm-reportes-panel',
+        ['TM_Reportes_Admin_Panel', 'render_panel_static']
+    );
+
+    // Submenú: Historial de Envíos
+    add_submenu_page(
+        'tm-reportes-moodle',
+        'Historial de Envíos',
+        '📜 Historial',
+        'manage_options',
+        'tm-reportes-historial',
+        ['TM_Reportes_Admin_Panel', 'render_historial_static']
     );
 }
 
@@ -540,16 +636,44 @@ function tm_reportes_moodle_render_page()
                         foreach ($alumnos as $al) {
                             $suma_notas += floatval($al['nota_final']);
                             $suma_progreso += floatval($al['progreso']);
-                            if ($al['ultimo_acceso_unix'] == 0) {
+
+                            $progreso = floatval($al['progreso']);
+                            $ultimo = intval($al['ultimo_acceso_unix']);
+
+                            // Conteo de accesos
+                            if ($ultimo == 0) {
                                 $total_nunca++;
                             } else {
                                 $total_ingresaron++;
-                                if ((time() - $al['ultimo_acceso_unix']) / DAY_IN_DAYS > 7) {
-                                    $alumnos_criticos++;
-                                }
                             }
-                            if (floatval($al['progreso']) >= 100) {
+
+                            // Progreso 100%
+                            if ($progreso >= 100) {
                                 $total_100++;
+                            }
+
+                            // === NUEVO CÁLCULO DE ALUMNOS EN RIESGO ===
+                            // Un alumno está en riesgo si cumple CUALQUIERA de estas condiciones:
+                            // 1. Progreso < 100% Y no se ha conectado en más de 7 días
+                            // 2. Nunca ha ingresado
+                            // 3. Progreso < 50%
+                            $en_riesgo = false;
+
+                            if ($ultimo == 0) {
+                                // Condición 2: Nunca ha ingresado
+                                $en_riesgo = true;
+                            } elseif ($progreso < 100 && (time() - $ultimo) / DAY_IN_SECONDS > 7) {
+                                // Condición 1: Progreso incompleto + inactivo >7 días
+                                $en_riesgo = true;
+                            }
+
+                            if ($progreso < 50) {
+                                // Condición 3: Progreso crítico < 50%
+                                $en_riesgo = true;
+                            }
+
+                            if ($en_riesgo) {
+                                $alumnos_criticos++;
                             }
                         }
                     }
@@ -595,7 +719,7 @@ function tm_reportes_moodle_render_page()
                                     class="sort-indicator">⇅</span></th>
                             <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">Nota Final <span
                                     class="sort-indicator">⇅</span></th>
-                            <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">Estado de Alerta <span
+                            <th class="sortable" data-sort-type="number" onclick="tmSortTable(this)">Último Acceso <span
                                     class="sort-indicator">⇅</span></th>
                         </tr>
                     </thead>
@@ -606,24 +730,20 @@ function tm_reportes_moodle_render_page()
                             </tr>
                         <?php else: ?>
                             <?php foreach ($alumnos as $alumno):
-                                $alerta = '🟢 Activo';
-                                $estilo_alerta = 'color: #46b450; font-weight: bold;';
-                                $alerta_sort = 3; // Para sorting numérico
-            
-                                if ($alumno['ultimo_acceso_unix'] == 0) {
-                                    $alerta = '🔴 Nunca ha ingresado';
-                                    $estilo_alerta = 'color: #dc3232; font-weight: bold;';
-                                    $alerta_sort = 0;
+                                // Formatear último acceso
+                                $ultimo_unix = intval($alumno['ultimo_acceso_unix']);
+                                if ($ultimo_unix === 0) {
+                                    $acceso_humano = 'Nunca';
+                                    $estilo_acceso = 'color: #dc3232; font-weight: bold;';
                                 } else {
-                                    $dias_inactivo = (time() - $alumno['ultimo_acceso_unix']) / DAY_IN_SECONDS;
+                                    $acceso_humano = date_i18n('d-m-Y H:i', $ultimo_unix);
+                                    $dias_inactivo = (time() - $ultimo_unix) / DAY_IN_SECONDS;
                                     if ($dias_inactivo > 7) {
-                                        $alerta = '🔴 En Riesgo (>7d)';
-                                        $estilo_alerta = 'color: #dc3232; font-weight: bold;';
-                                        $alerta_sort = 1;
+                                        $estilo_acceso = 'color: #dc3232; font-weight: bold;';
                                     } elseif ($dias_inactivo > 3) {
-                                        $alerta = '🟡 Ausente (>3d)';
-                                        $estilo_alerta = 'color: #ffb900; font-weight: bold;';
-                                        $alerta_sort = 2;
+                                        $estilo_acceso = 'color: #ffb900; font-weight: bold;';
+                                    } else {
+                                        $estilo_acceso = 'color: #46b450; font-weight: bold;';
                                     }
                                 }
                                 ?>
@@ -643,8 +763,8 @@ function tm_reportes_moodle_render_page()
                                     </td>
                                     <td data-sort-value="<?php echo esc_attr($alumno['nota_final'] ? $alumno['nota_final'] : '0'); ?>">
                                         <strong><?php echo $alumno['nota_final'] ? $alumno['nota_final'] : '0.0'; ?></strong></td>
-                                    <td data-sort-value="<?php echo $alerta_sort; ?>" style="<?php echo $estilo_alerta; ?>">
-                                        <?php echo $alerta; ?></td>
+                                    <td data-sort-value="<?php echo $ultimo_unix; ?>" style="<?php echo $estilo_acceso; ?>">
+                                        <?php echo esc_html($acceso_humano); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
