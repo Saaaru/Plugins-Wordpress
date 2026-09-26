@@ -1,4 +1,4 @@
-# 🚀 Ficha de Marketing — MP Tools para Mercado Público
+# 🚀 Ficha de Marketing — KodaTools para Mercado Público
 
 > **Una sola extensión para gobernar Mercado Público.** Descarga, carga, analiza y exporta ofertas en segundos — no en horas.
 
@@ -12,7 +12,7 @@ Quien gestiona compras en Mercado Público (Compra Ágil y Licitaciones) pierde 
 
 ## 💡 La solución
 
-**MP Tools** automatiza de extremo a extremo el trabajo operativo dentro del portal de Mercado Público, con cinco superpoderes en un solo clic:
+**KodaTools** automatiza de extremo a extremo el trabajo operativo dentro del portal de Mercado Público, con cinco superpoderes en un solo clic:
 
 | # | Superpoder | Qué hace | Beneficio |
 | :-- | :-- | :-- | :-- |
@@ -24,7 +24,7 @@ Quien gestiona compras en Mercado Público (Compra Ágil y Licitaciones) pierde 
 
 ---
 
-## ✨ Diferenciadores clave (por qué elegir MP Tools)
+## ✨ Diferenciadores clave (por qué elegir KodaTools)
 
 - **🕐 Ahorro de tiempo comprobado** — Lo que toma una mañana, se hace en un par de clics.
 - **🧠 Inteligencia de presupuesto en vivo** — Semáforo rojo/amarillo que evalúa cada oferta contra el presupuesto disponible o estimado.
@@ -58,12 +58,12 @@ Quien gestiona compras en Mercado Público (Compra Ágil y Licitaciones) pierde 
 
 ## 📝 Descripción corta (para la ficha de la tienda)
 
-> **MP Tools — Mercado Público (Compra Ágil y Licitaciones)**
+> **KodaTools — Mercado Público (Compra Ágil y Licitaciones)**
 > Potencia tu productividad en Mercado Público. Descarga masivamente adjuntos de todas las ofertas, carga ítems desde Excel, resalta y auto-rechaza las ofertas fuera de presupuesto y exporta el cuadro comparativo a Excel. Todo local, privado y compatible con Chrome y Edge.
 
 ## 📝 Descripción larga (para la ficha de la tienda)
 
-MP Tools es la navaja suiza para quienes trabajan a diario en Mercado Público. Reúne cinco automatizaciones en una sola extensión:
+KodaTools es la navaja suiza para quienes trabajan a diario en Mercado Público. Reúne cinco automatizaciones en una sola extensión:
 
 1. **Descarga Masiva (Compra Ágil):** obtén todos los documentos de una o todas las ofertas, organizados automáticamente por cotización y proveedor, con progreso en tiempo real y filtro de ofertas inadmisibles.
 2. **Carga Masiva desde Excel:** copia y pega tus filas de Excel o Google Sheets y la extensión las ingresa en los formularios web, sincronizando el estado interno de React para que todo se guarde correctamente.
@@ -78,7 +78,7 @@ MP Tools es la navaja suiza para quienes trabajan a diario en Mercado Público. 
 ## 🛡️ Garantía de privacidad (argumento de venta)
 
 > *«Tus datos no salen de tu equipo.»*
-> MP Tools no tiene servidores propios. No almacena contraseñas, cookies ni tokens. El token de autorización se captura en memoria únicamente para realizar las descargas y se elimina al cerrar la pestaña. Toda la inteligencia ocurre dentro de tu navegador.
+> KodaTools no tiene servidores propios. No almacena contraseñas, cookies ni tokens. El token de autorización se captura en memoria únicamente para realizar las descargas y se elimina al cerrar la pestaña. Toda la inteligencia ocurre dentro de tu navegador.
 
 ---
 
@@ -96,4 +96,4 @@ MP Tools es la navaja suiza para quienes trabajan a diario en Mercado Público. 
 
 ---
 
-*MP Tools es una herramienta independiente y no está afiliada ni respaldada por Mercado Público / Dirección de Compras y Contratación Pública (ChileCompra).*
+*KodaTools es una herramienta independiente y no está afiliada ni respaldada por Mercado Público / Dirección de Compras y Contratación Pública (ChileCompra).*

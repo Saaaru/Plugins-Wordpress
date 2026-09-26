@@ -1,5 +1,5 @@
 /**
- * soykoda_bridge.js — Content Script Bridge entre MP Tools y SoyKoda.
+ * soykoda_bridge.js — Content Script Bridge entre KodaTools y SoyKoda.
  *
  * Inyectado con run_at: "document_start" exclusivamente en:
  *  - https://soykoda.cloud/*
@@ -19,6 +19,7 @@
   function markDom() {
     if (document.documentElement) {
       document.documentElement.setAttribute('data-mp-tools', '1');
+      document.documentElement.setAttribute('data-kodatools', '1');
     }
   }
 
@@ -64,7 +65,7 @@
     // Validar nonce obligatorio para anti-spoofing
     const nonce = data.nonce;
     if (!nonce || typeof nonce !== 'string') {
-      console.warn('[MP Tools Bridge] Mensaje ignorado: nonce inválido o ausente.');
+      console.warn('[KodaTools Bridge] Mensaje ignorado: nonce inválido o ausente.');
       return;
     }
 
@@ -81,7 +82,7 @@
           const lastError = chrome.runtime.lastError;
 
           if (lastError) {
-            console.error('[MP Tools Bridge] Error de runtime:', lastError.message);
+            console.error('[KodaTools Bridge] Error de runtime:', lastError.message);
             window.postMessage(
               {
                 source: 'mp-tools',
@@ -132,7 +133,7 @@
         }
       );
     } catch (err) {
-      console.error('[MP Tools Bridge] Fallo crítico enviando a background:', err);
+      console.error('[KodaTools Bridge] Fallo crítico enviando a background:', err);
       window.postMessage(
         {
           source: 'mp-tools',
@@ -151,5 +152,5 @@
     }
   });
 
-  console.log('[MP Tools Bridge] Puente SoyKoda inicializado y escuchando en', window.location.origin);
+  console.log('[KodaTools Bridge] Puente SoyKoda inicializado y escuchando en', window.location.origin);
 })();

@@ -1,5 +1,5 @@
 /**
- * popup.js — Controlador del popup de la extensión MP Tools.
+ * popup.js — Controlador del popup de la extensión KodaTools.
  *
  * Los botones de descarga de Licitaciones ahora se inyectan automáticamente
  * (content_scripts del manifest con all_frames:true), por lo que el popup ya

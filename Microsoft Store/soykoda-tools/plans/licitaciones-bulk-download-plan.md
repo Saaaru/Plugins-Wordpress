@@ -2,7 +2,7 @@
 
 > **Status:** Implemented (pivoted) — see "Pivot (2026)" below
 > **Target module:** Legacy ASP.NET portal `voucherview.aspx` (Licitaciones / RFB)
-> **Extension:** MP Tools (Manifest V3) — `mp_descargas`
+> **Extension:** KodaTools (Manifest V3) — `soykoda-tools`
 
 > ## ⚠️ Pivot (2026) — descarga desde la página principal, no desde el popup
 > La inyección en la **ventana emergente** `voucherview.aspx` resultó **imposible en Edge**:

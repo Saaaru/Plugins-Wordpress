@@ -1,6 +1,6 @@
-# 🤖 AI-Ready Architectural Reference: MP Tools (Mercado Público Automation)
+# 🤖 AI-Ready Architectural Reference: KodaTools (Mercado Público Automation)
 
-This document is compiled specifically for Large Language Models (LLMs) and AI Assistants to quickly master the codebase, integration patterns, APIs, and quirks of the **MP Tools (Descarga Masiva de Adjuntos - Mercado Público)** browser extension.
+This document is compiled specifically for Large Language Models (LLMs) and AI Assistants to quickly master the codebase, integration patterns, APIs, and quirks of the **KodaTools (Descarga Masiva de Adjuntos - Mercado Público)** browser extension.
 
 ---
 

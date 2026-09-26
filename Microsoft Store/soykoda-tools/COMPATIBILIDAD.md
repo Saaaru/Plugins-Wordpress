@@ -1,6 +1,6 @@
 # 🌐 Revisión de Compatibilidad — Chrome vs Edge
 
-**Extensión:** MP Tools para Mercado Público · **Versión:** 4.4.0 · **Manifest:** V3
+**Extensión:** KodaTools para Mercado Público · **Versión:** 4.4.0 · **Manifest:** V3
 
 ## ✅ Veredicto
 

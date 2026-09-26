@@ -41,7 +41,7 @@ CS  -> Web: { source: 'mp-tools',    type: 'MP_SOYKODA_RESULT', nonce: string, p
 
 ## 3. Resumen de Archivos Implementados
 
-### Repositorio Extensión MP Tools (`Plugins/Microsoft Store/mp_descargas/`)
+### Repositorio Extensión KodaTools (`Plugins/Microsoft Store/soykoda-tools/`)
 * [`manifest.json`](../manifest.json): Inyección de `soykoda_bridge.js` en `https://soykoda.cloud/*` y `http://localhost:3000/*`, permiso `offscreen`.
 * [`soykoda_bridge.js`](../soykoda_bridge.js): Content script con `data-mp-tools="1"`, filtro de origen y relay `window.postMessage` ↔ `chrome.runtime.sendMessage`.
 * [`bridge_background.js`](../bridge_background.js): Verificación de sesión (probe ligero `redirect: 'manual'`), gestión de offscreen y respuesta al handshake/fetch.

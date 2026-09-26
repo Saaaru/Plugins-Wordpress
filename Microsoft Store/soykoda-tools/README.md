@@ -1,4 +1,4 @@
-# 📥 MP Tools para Mercado Público (Compra Ágil) v4.4.0
+# 📥 KodaTools para Mercado Público (Compra Ágil) v4.4.0
 
 Una potente y sofisticada extensión de **Chrome / Edge** diseñada para optimizar, automatizar y agilizar tareas críticas dentro del portal de [Mercado Público](https://www.mercadopublico.cl/), específicamente en el módulo de **Compra Ágil** y ahora también en el portal legacy de **Licitaciones (Voucher View)**. Esta herramienta agrupa cinco funcionalidades clave en una única solución integrada que ahorra horas de trabajo manual.
 
@@ -10,7 +10,7 @@ Una potente y sofisticada extensión de **Chrome / Edge** diseñada para optimiz
 
 ```mermaid
 graph TD
-    A[MP Tools Extension] --> B[1. Descarga Masiva Compra Ágil]
+    A[KodaTools Extension] --> B[1. Descarga Masiva Compra Ágil]
     A --> C[2. Carga Masiva]
     A --> D[3. Resaltado & Auto-Rechazo]
     A --> E[4. Exportación de Ofertas]
@@ -115,7 +115,7 @@ El desarrollo se rige bajo una arquitectura modular y reactiva optimizada para *
 ## 📦 Instalación
 
 ### Desde la Chrome Web Store / Microsoft Edge Add-ons
-Basta con buscar **"MP Tools Mercado Público"** en la tienda de extensiones de tu navegador e instalarla. La extensión se activará automáticamente al navegar por Mercado Público.
+Basta con buscar **"KodaTools Mercado Público"** en la tienda de extensiones de tu navegador e instalarla. La extensión se activará automáticamente al navegar por Mercado Público.
 
 ### Modo Desarrollador (carga local)
 1. Descarga o clona este repositorio en tu máquina local.
@@ -124,7 +124,7 @@ Basta con buscar **"MP Tools Mercado Público"** en la tienda de extensiones de 
    * Edge: `edge://extensions/`
 3. Activa el interruptor de **"Modo desarrollador"** (Developer Mode) en la esquina superior derecha.
 4. Presiona el botón **"Cargar descomprimida"** (Load unpacked).
-5. Selecciona la carpeta raíz del proyecto (`mp_descargas`).
+5. Selecciona la carpeta raíz del proyecto (`soykoda-tools`).
 6. ¡Listo! La extensión se activará automáticamente al navegar por Mercado Público.
 
 ---

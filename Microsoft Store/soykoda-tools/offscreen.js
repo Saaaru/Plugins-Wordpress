@@ -233,4 +233,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-console.log('[MP Tools Offscreen] DOM Parser offscreen document listo.');
+console.log('[KodaTools Offscreen] DOM Parser offscreen document listo.');
