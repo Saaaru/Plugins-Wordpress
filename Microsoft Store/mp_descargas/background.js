@@ -1,4 +1,5 @@
 import { initVoucherHandler } from './voucher_background.js';
+import { initBridgeHandler } from './bridge_background.js';
 
 // Reporte de escaneo del módulo de descarga de Licitaciones (licitaciones_download.js):
 // cada frame reporta periódicamente dónde corre y cuántos botones/grilla ve. Así vemos
@@ -167,6 +168,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Módulo Licitaciones (Voucher View): registra su propio listener para 'downloadVoucherFiles'.
 initVoucherHandler();
+
+// Módulo SoyKoda Bridge: comunicación bidireccional segura con plataforma SoyKoda
+initBridgeHandler();
 
 // NOTA: La inyección programática en el popup del voucher se ELIMINÓ. Se confirmó
 // que Edge bloquea la inyección en la ventana emergente chromeless. La descarga

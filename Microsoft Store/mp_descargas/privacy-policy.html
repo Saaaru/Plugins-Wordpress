@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidad | MP Tools - Mercado Público</title>
+  <meta name="description" content="Política de privacidad oficial de la extensión de navegador MP Tools para Mercado Público. Declaración de permisos, flujo local de datos y cero custodia de credenciales.">
+  <style>
+    :root {
+      --primary: #00549f;
+      --primary-dark: #003d73;
+      --primary-light: #e8f2fa;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --success-light: #dcfce7;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text-main);
+      background-color: var(--bg);
+      line-height: 1.65;
+      padding: 0;
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    header {
+      background-color: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 24px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .extension-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background-color: var(--primary-light);
+      color: var(--primary);
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .title-area {
+      padding: 48px 0 24px 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 720px;
+    }
+
+    .meta-box {
+      margin-top: 16px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .meta-box strong {
+      color: var(--text-main);
+    }
+
+    main {
+      padding: 20px 0 80px 0;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .num-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background-color: var(--primary-light);
+      color: var(--primary);
+      border-radius: 50%;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    p {
+      margin-bottom: 14px;
+      color: #334155;
+      font-size: 15px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    ul, ol {
+      margin: 14px 0 16px 20px;
+      color: #334155;
+      font-size: 15px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    .alert {
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin: 18px 0;
+      font-size: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .alert-green {
+      background-color: var(--success-light);
+      border: 1px solid #bbf7d0;
+      color: #14532d;
+    }
+
+    .alert-amber {
+      background-color: var(--amber-light);
+      border: 1px solid #fde68a;
+      color: #78350f;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      margin: 18px 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: #334155;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .code-tag {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      background-color: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      background-color: #ffffff;
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container header-content">
+      <div class="logo-area">
+        <span class="extension-badge">🧩 Extensión de Navegador</span>
+        <strong style="font-size: 16px; color: #0f172a;">MP Tools - Mercado Público</strong>
+      </div>
+      <div>
+        <span style="font-size: 13px; color: var(--text-muted);">Compatibilidad: Google Chrome & Microsoft Edge</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="container title-area">
+    <h1>Política de Privacidad</h1>
+    <p class="subtitle">
+      Esta política explica el tratamiento de la información, el alcance de los permisos solicitados y los compromisos de protección de datos de la extensión de navegador <strong>MP Tools - Mercado Público</strong>.
+    </p>
+    <div class="meta-box">
+      <div><strong>Versión actual:</strong> 4.4.0 (Manifest V3)</div>
+      <div><strong>Última actualización:</strong> 26 de septiembre de 2026</div>
+      <div><strong>Titular / Desarrollador:</strong> Solvitu / SoyKoda</div>
+      <div><strong>Contacto:</strong> contacto@solvitu.com</div>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- 01. Propósito Único -->
+    <section class="card">
+      <h2><span class="num-pill">01</span> Propósito Único (Single Purpose)</h2>
+      <p>
+        <strong>MP Tools - Mercado Público</strong> es una extensión de productividad diseñada con el propósito exclusivo de <strong>agilizar la consulta, descarga estructurada de antecedentes y sincronización de información de procesos de compras públicas</strong> (órdenes de compra, licitaciones y compras ágiles) en el portal oficial de compras del Estado de Chile (<em>mercadopublico.cl</em>).
+      </p>
+      <p>
+        La extensión asiste a compradores y proveedores facilitando tareas operativas como la descarga masiva de adjuntos en subcarpetas locales y la visualización organizada de antecedentes en la plataforma web compañera SoyKoda (<a href="https://soykoda.cloud" target="_blank" rel="noopener">soykoda.cloud</a>).
+      </p>
+    </section>
+
+    <!-- 02. Permisos y Justificación Técnica -->
+    <section class="card">
+      <h2><span class="num-pill">02</span> Permisos Solicitados en manifest.json y Justificación Técnica</h2>
+      <p>
+        De acuerdo con las políticas para desarrolladores de la <strong>Chrome Web Store</strong> y <strong>Microsoft Edge Add-ons</strong>, la extensión solicita únicamente los permisos estrictamente indispensables para cumplir con su propósito:
+      </p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Permiso</th>
+              <th>Tipo</th>
+              <th>Justificación técnica</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="code-tag">downloads</span></td>
+              <td>API de Navegador</td>
+              <td>Permite guardar en la carpeta de "Descargas" local del usuario los archivos adjuntos de licitaciones y cotizaciones organizados en subcarpetas numeradas por proveedor.</td>
+            </tr>
+            <tr>
+              <td><span class="code-tag">scripting</span></td>
+              <td>API de Navegador</td>
+              <td>Permite inyectar elementos visuales amigables (botones de descarga, indicadores de progreso y cuadro de carga masiva desde Excel) en las páginas del portal de Mercado Público.</td>
+            </tr>
+            <tr>
+              <td><span class="code-tag">offscreen</span></td>
+              <td>API de Navegador (MV3)</td>
+              <td>Permite crear un entorno de procesamiento en segundo plano para analizar documentos HTML legados (WebForms) y transformarlos a estructuras JSON mediante <span class="code-tag">DOMParser</span>, dado que los Service Workers de Manifest V3 no disponen de APIs de manipulación de DOM.</td>
+            </tr>
+            <tr>
+              <td><span class="code-tag">https://*.mercadopublico.cl/*</span></td>
+              <td>Host Permission</td>
+              <td>Permite interactuar exclusivamente con el portal de compras públicas de Chile y sus subdominios de servicios (ej. <span class="code-tag">servicios-compra-agil.mercadopublico.cl</span>). No se solicitan permisos sobre ningún otro sitio web de navegación general.</td>
+            </tr>
+            <tr>
+              <td>Inyección en <span class="code-tag">soykoda.cloud</span> y <span class="code-tag">localhost:3000</span></td>
+              <td>Content Script</td>
+              <td>Inyecta el puente de mediación local (<span class="code-tag">soykoda_bridge.js</span>) para permitir la comunicación bidireccional segura entre la extensión y la aplicación web del usuario cuando este solicita explícitamente sincronizar antecedentes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 03. Cero Custodia de Credenciales -->
+    <section class="card">
+      <h2><span class="num-pill">03</span> Declaración Explícita de "Cero Custodia de Credenciales"</h2>
+      <div class="alert alert-green">
+        <svg style="width: 22px; height: 22px; flex-shrink: 0; color: #16a34a;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+        </svg>
+        <div>
+          <strong>Línea Roja de Privacidad:</strong> La extensión jamás lee, almacena, transmite ni tiene acceso a contraseñas, credenciales de ClaveÚnica, tokens de autenticación permanentes ni códigos de segundo factor (2FA).
+        </div>
+      </div>
+      <p>
+        El inicio de sesión y la autenticación se realizan de manera <strong>100% aislada</strong> en los servidores oficiales de Mercado Público y ClaveÚnica (Gobierno de Chile).
+      </p>
+      <p>
+        La extensión no gestiona credenciales ni interviene en el formulario de inicio de sesión: opera única y exclusivamente aprovechando la sesión activa preexistente en el navegador web del usuario a través de cookies de sesión automáticas y efímeras, las cuales jamás se exportan fuera del entorno local del navegador.
+      </p>
+    </section>
+
+    <!-- 04. Alcance de los Datos Procesados y Propósito -->
+    <section class="card">
+      <h2><span class="num-pill">04</span> Alcance de los Datos Procesados y Propósito</h2>
+      <p>
+        La extensión accede exclusivamente a información de procesos de compras públicas:
+      </p>
+      <ul>
+        <li><strong>Información de Procesos:</strong> Código de orden de compra, código de licitación, cotizaciones de Compra Ágil, nombres de proveedores, montos ofertados, estados de convocatoria y metadatos de documentos adjuntos.</li>
+        <li><strong>Momento de Acceso:</strong> La lectura y sincronización se efectúan <em>única y exclusivamente</em> cuando el usuario hace clic o solicita la acción de manera explícita (por ejemplo, pulsando el botón "Sincronizar con Mercado Público" desde la plataforma web compañera SoyKoda o pulsando los botones de descarga masiva en el portal).</li>
+        <li><strong>Propósito:</strong> Permitir la visualización organizada de antecedentes, cálculo comparativo de ofertas y análisis normativo asistido en el panel de SoyKoda.</li>
+      </ul>
+    </section>
+
+    <!-- 05. Flujo Local y Política de Uso Limitado -->
+    <section class="card">
+      <h2><span class="num-pill">05</span> Flujo Local y Cumplimiento de "Limited Use"</h2>
+      <p>
+        En estricto cumplimiento del programa de <strong>Uso Limitado (Limited Use Policy)</strong> de la Chrome Web Store y Microsoft Edge Partner Center:
+      </p>
+      <div class="alert alert-amber">
+        <svg style="width: 22px; height: 22px; flex-shrink: 0; color: #b45309;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
+        <div>
+          <strong>Compromiso Taxativo:</strong> Los datos procesados por la extensión <strong>NO se venden, arriendan, comercializan ni transfieren a terceros</strong> con fines publicitarios, de telemercadeo ni de perfilamiento crediticio.
+        </div>
+      </div>
+      <ul>
+        <li><strong>Transferencia Local en el Navegador:</strong> La comunicación entre la extensión y la aplicación web SoyKoda ocurre localmente mediante el API <span class="code-tag">window.postMessage</span> con verificación rigurosa de origen (<span class="code-tag">event.origin</span>) y nonces únicos anti-spoofing. No viajan datos a servidores de terceros intermediarios.</li>
+        <li><strong>Sin Uso para Publicidad:</strong> La información no se utiliza para mostrar anuncios ni para construir perfiles de comportamiento comercial.</li>
+        <li><strong>Sin Entrenamiento de Modelos Públicos:</strong> Los datos procesados localmente no se emplean para entrenar modelos generales de inteligencia artificial con información privada del usuario.</li>
+      </ul>
+    </section>
+
+    <!-- 06. Uso del Entorno Offscreen -->
+    <section class="card">
+      <h2><span class="num-pill">06</span> Procesamiento en Entorno Offscreen (chrome.offscreen)</h2>
+      <p>
+        El portal de Mercado Público cuenta con módulos construidos sobre tecnologías ASP.NET WebForms legadas, cuyas tablas y paginaciones requieren análisis del árbol DOM.
+      </p>
+      <p>
+        Dado que los Service Workers de Manifest V3 no tienen acceso al objeto <span class="code-tag">document</span> ni a la API <span class="code-tag">DOMParser</span>, la extensión instancia un documento offscreen interno aislado (<span class="code-tag">offscreen.html</span>) con la justificación técnica <span class="code-tag">DOM_PARSER</span>.
+      </p>
+      <ul>
+        <li>El entorno offscreen se utiliza exclusivamente para convertir fragmentos de HTML a JSON estructurado.</li>
+        <li>No ejecuta scripts remotos de ningún tipo.</li>
+        <li>No realiza peticiones de red directas ni monitorea la actividad de otras pestañas o ventanas del usuario.</li>
+      </ul>
+    </section>
+
+    <!-- 07. Retención y Control del Usuario -->
+    <section class="card">
+      <h2><span class="num-pill">07</span> Retención de Datos y Control del Usuario</h2>
+      <p>
+        La extensión opera bajo un modelo de <strong>memoria volátil</strong>:
+      </p>
+      <ul>
+        <li>No utiliza bases de datos locales persistentes ni almacena historiales de navegación dentro del navegador.</li>
+        <li>Cualquier información temporal o token efímero capturado en memoria para consultas inmediatas se elimina automáticamente al cerrar la pestaña o recargar el navegador.</li>
+        <li><strong>Persistencia Opcional en SoyKoda:</strong> Si el usuario decide conscientemente guardar un snapshot de antecedentes en su cuenta de SoyKoda, los datos viajan directamente hacia su cuenta privada en la plataforma bajo la <a href="https://soykoda.cloud/privacidad" target="_blank" rel="noopener">Política de Privacidad de SoyKoda</a>, donde el usuario puede solicitar su eliminación en cualquier momento.</li>
+        <li><strong>Desinstalación:</strong> El usuario puede remover la extensión en cualquier momento desde el menú de extensiones de su navegador (<span class="code-tag">chrome://extensions</span> o <span class="code-tag">edge://extensions</span>), lo que elimina inmediatamente cualquier residuo local de la extensión.</li>
+      </ul>
+    </section>
+
+    <!-- 08. Contacto y Consultas -->
+    <section class="card">
+      <h2><span class="num-pill">08</span> Contacto sobre Privacidad</h2>
+      <p>
+        Si tienes preguntas, observaciones o inquietudes relativas a esta política de privacidad o al funcionamiento de la extensión, puedes escribirnos a:
+      </p>
+      <p>
+        ✉️ <strong>Correo electrónico de privacidad:</strong> <a href="mailto:contacto@solvitu.com">contacto@solvitu.com</a><br>
+        🌐 <strong>Sitio web oficial:</strong> <a href="https://soykoda.cloud" target="_blank" rel="noopener">https://soykoda.cloud</a><br>
+        🏢 <strong>Titular:</strong> Solvitu / SoyKoda — Santiago de Chile
+      </p>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© 2026 Solvitu / SoyKoda. Todos los derechos reservados.</p>
+      <p style="margin-top: 6px;">
+        <a href="https://soykoda.cloud/privacidad" target="_blank" rel="noopener">Política de Privacidad SoyKoda</a> • 
+        <a href="https://soykoda.cloud/terminos" target="_blank" rel="noopener">Términos de Servicio</a> • 
+        <a href="https://soykoda.cloud/contacto" target="_blank" rel="noopener">Contacto</a>
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

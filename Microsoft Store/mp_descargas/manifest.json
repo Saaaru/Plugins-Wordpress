@@ -35,6 +35,17 @@
       ],
       "run_at": "document_end",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://soykoda.cloud/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "soykoda_bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
@@ -49,7 +60,8 @@
   ],
   "permissions": [
     "downloads",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   "host_permissions": [
     "https://*.mercadopublico.cl/*"

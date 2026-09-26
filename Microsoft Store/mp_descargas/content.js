@@ -406,9 +406,15 @@
 
         if (event.data.type === 'MP_DATA_FROM_PAGE') {
             interceptedData = event.data.payload;
+            if (event.data.payload?.token) {
+                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => {});
+            }
             setTimeout(injectDownloadButton, 500);
         } else if (event.data.type === 'MP_ALL_OFFERS_FROM_PAGE') {
             allOffersData = event.data.payload;
+            if (event.data.payload?.token) {
+                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => {});
+            }
             setTimeout(injectDownloadAllButton, 500);
         }
     });

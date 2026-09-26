@@ -11,16 +11,46 @@
         processDataMessageType: 'MP_ALL_OFFERS_FROM_PAGE'
     };
 
+    let cachedAuthToken = null;
+
+    function extractAuthToken(headers) {
+        if (!headers) return null;
+
+        // If it's a Headers instance (e.g. new Headers())
+        if (typeof headers.get === 'function') {
+            const token = headers.get('Authorization') || headers.get('authorization') || headers.get('AUTHORIZATION');
+            if (token) return token;
+        }
+
+        // If it's a plain object or map
+        if (typeof headers === 'object') {
+            for (const key of Object.keys(headers)) {
+                if (key.toLowerCase() === 'authorization') {
+                    return headers[key];
+                }
+            }
+        }
+        return null;
+    }
+
     function processAndSendData(responseText, requestHeaders, url) {
         try {
             const data = JSON.parse(responseText);
-            const authToken = requestHeaders ? (typeof requestHeaders.get === 'function' ? requestHeaders.get('Authorization') : requestHeaders['Authorization']) : null;
+            const extractedToken = extractAuthToken(requestHeaders);
+            if (extractedToken) {
+                cachedAuthToken = extractedToken;
+            }
+            const authToken = extractedToken || cachedAuthToken;
 
-            if (!authToken) return;
+            if (!authToken) {
+                console.warn('[Descarga Masiva - Interceptor] No se encontró token Authorization activo.');
+                return;
+            }
 
             // Revisamos si es la respuesta de TODAS las ofertas de la solicitud
             if (url && url.includes(CONFIG.api.processUrlPattern) && !url.includes(CONFIG.api.detailsUrlPattern)) {
                 if (data?.payload?.ofertas && data.payload.ofertas.length > 0) {
+                    console.log('[Descarga Masiva - Interceptor] Capturadas', data.payload.ofertas.length, 'ofertas. Notificando a content script...');
                     window.postMessage({
                         type: CONFIG.processDataMessageType,
                         payload: {
@@ -33,6 +63,7 @@
 
             // Mantenemos la lógica anterior para la obtención del modal individual
             if (data?.payload?.documentosAdjuntos) {
+                console.log('[Descarga Masiva - Interceptor] Capturados adjuntos de oferta individual. Notificando...');
                 window.postMessage({
                     type: CONFIG.messageType,
                     payload: {
@@ -42,13 +73,24 @@
                 }, window.location.origin);
             }
 
-        } catch (e) { }
+        } catch (e) {
+            console.error('[Descarga Masiva - Interceptor] Error procesando respuesta JSON:', e);
+        }
     }
 
     const originalFetch = window.fetch;
     window.fetch = async function (...args) {
         const url = args[0] instanceof Request ? args[0].url : args[0];
-        const requestHeaders = args[1]?.headers;
+        let requestHeaders = args[1]?.headers;
+        if (!requestHeaders && args[0] instanceof Request) {
+            requestHeaders = args[0].headers;
+        }
+
+        const token = extractAuthToken(requestHeaders);
+        if (token) {
+            cachedAuthToken = token;
+        }
+
         const response = await originalFetch.apply(this, args);
 
         if (typeof url === 'string' && url.includes(CONFIG.api.processUrlPattern)) {
@@ -71,6 +113,9 @@
     XMLHttpRequest.prototype.setRequestHeader = function (header, value) {
         if (this._mp_headers) {
             this._mp_headers[header] = value;
+        }
+        if (header && header.toLowerCase() === 'authorization') {
+            cachedAuthToken = value;
         }
         return originalXhrSetRequestHeader.apply(this, arguments);
     };
