@@ -25,53 +25,28 @@ const ENDPOINTS = {
 /**
  * Valida la existencia de una sesión activa de Mercado Público.
  */
-export async function checkMpSession(forceRefresh = false) {
-  const now = Date.now();
-  if (!forceRefresh && sessionCache.hasSession !== null && (now - sessionCache.timestamp < CACHE_TTL_MS)) {
-    return sessionCache.hasSession;
-  }
-
-  // 1. Si existe un token Bearer activo en memoria, la sesión está garantizada
-  if (cachedAuthToken && typeof cachedAuthToken === 'string' && cachedAuthToken.length > 20) {
-    sessionCache = { hasSession: true, timestamp: now };
-    return true;
-  }
-
-  // 2. Probe ligero con redirect: 'manual' contra un recurso protegido por cookies
+export async function checkMpSession() {
   try {
-    const res = await fetch(ENDPOINTS.probeUrl, {
-      method: 'GET',
-      credentials: 'include',
-      redirect: 'manual'
+    // 1. Verificación instantánea por cookies (0 ms, sin llamadas de red)
+    if (typeof chrome !== "undefined" && chrome.cookies) {
+      const cookies = await chrome.cookies.getAll({ domain: "mercadopublico.cl" });
+      const hasSession = cookies.some(c => 
+        c.name.includes("ASP.NET_SessionId") || 
+        c.name.toLowerCase().includes("ticket") || 
+        c.name.toLowerCase().includes("token") ||
+        c.name.includes(".ASPXAUTH")
+      );
+      if (hasSession) return true;
+    }
+    // 2. Respaldo por fetch a la URL real del menú
+    const response = await fetch("https://www.mercadopublico.cl/Portal/Modules/Menu/Menu.aspx", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
     });
-
-    // En modo redirect: 'manual', si la cookie expiró el servidor redirige a ClaveÚnica o login.
-    // La respuesta en ese caso es 'opaqueredirect' (o status 301/302).
-    if (res.type === 'opaqueredirect' || res.status === 302 || res.status === 301) {
-      sessionCache = { hasSession: false, timestamp: now };
-      return false;
-    }
-
-    if (res.ok || res.status === 200) {
-      const text = await res.text();
-      // Verificamos marcadores de login de ClaveÚnica
-      if (
-        text.includes('claveunica.gob.cl') ||
-        text.includes('Iniciar sesión con ClaveÚnica') ||
-        text.includes('login.aspx')
-      ) {
-        sessionCache = { hasSession: false, timestamp: now };
-        return false;
-      }
-      sessionCache = { hasSession: true, timestamp: now };
-      return true;
-    }
-
-    sessionCache = { hasSession: false, timestamp: now };
-    return false;
+    return response.ok && !response.url.includes("login") && !response.url.includes("claveunica");
   } catch (err) {
-    console.warn('[Bridge BG] Error al verificar sesión de Mercado Público:', err);
-    sessionCache = { hasSession: false, timestamp: now };
+    console.warn("[Bridge BG] Error al verificar sesión MP:", err);
     return false;
   }
 }
