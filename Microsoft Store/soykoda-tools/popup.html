@@ -83,16 +83,60 @@
         .thanks a:hover {
             background: #0072ce;
         }
+
+        .analyzer-box {
+            margin-top: 14px;
+            padding: 12px;
+            background: #f0f7ff;
+            border: 1px solid #cce3ff;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .analyzer-btn {
+            width: 100%;
+            padding: 9px 12px;
+            background: #00549f;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+
+        .analyzer-btn:hover {
+            background: #0072ce;
+        }
+
+        .analyzer-hint {
+            margin: 6px 0 0 0;
+            font-size: 11px;
+            color: #475569;
+            line-height: 1.35;
+        }
     </style>
 </head>
 
 <body>
     <h1>🛠️ KodaTools</h1>
-    <p class="subtitle">Descarga masiva — Licitaciones (Comprobante de oferta)</p>
+    <p class="subtitle">Descarga masiva — Licitaciones & Compra Ágil</p>
 
     <div class="info">
         Pulsa 📥 junto a cada oferta para descargar <strong>todos</strong> sus adjuntos en
-        <code>Descargas/Licitacion_<código>/<proveedor>/</code>.
+        <code>Descargas/<código>/<proveedor>/</code>.
+    </div>
+
+    <div class="analyzer-box">
+        <button type="button" id="openSoykodaAnalyzer" class="analyzer-btn">
+            ✨ Auditar Ofertas en SoyKoda
+        </button>
+        <p class="analyzer-hint">Analiza el cumplimiento técnico, bases y precios con IA de tus descargas.</p>
     </div>
 
     <div class="thanks">

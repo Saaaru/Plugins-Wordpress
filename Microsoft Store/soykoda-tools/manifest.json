@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KodaTools - Mercado Público (Compra Ágil)",
   "short_name": "KodaTools",
-  "version": "4.4.2",
+  "version": "4.5.2",
   "description": "Descarga masiva de Compra Ágil y Licitaciones. Incluye carga masiva desde Excel.  ",
   "icons": {
     "16": "icon.png",
@@ -63,7 +63,8 @@
     "downloads",
     "scripting",
     "offscreen",
-    "cookies"
+    "cookies",
+    "storage"
   ],
   "host_permissions": [
     "https://*.mercadopublico.cl/*",

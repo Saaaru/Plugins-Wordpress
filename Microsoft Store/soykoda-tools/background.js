@@ -29,15 +29,37 @@ const CONFIG = {
     }
 };
 
-// Utilities to clean folder names (avoid invalid characters)
-function sanitizeFilename(name) {
-    if (!name) return 'Desconocido';
-    return name
+function sanitizeFolderName(name) {
+    if (!name) return 'Carpeta';
+    let clean = name
         .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+        .replace(/\s+/g, ' ')
         .trim()
         .replace(/^\.+/, '')
-        .replace(/\.+$/, '')
-        || 'Desconocido';
+        .replace(/[. ]+$/, '');
+    if (clean.length > 60) clean = clean.substring(0, 60).trim().replace(/[. ]+$/, '');
+    return clean || 'Carpeta';
+}
+
+function sanitizeFilename(name) {
+    if (!name) return 'adjunto.pdf';
+    let clean = name
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Preservar extensión si existe
+    const lastDot = clean.lastIndexOf('.');
+    if (lastDot > 0 && lastDot < clean.length - 1) {
+        let base = clean.substring(0, lastDot).trim().replace(/[. ]+$/, '');
+        const ext = clean.substring(lastDot).trim();
+        if (base.length > 60) base = base.substring(0, 60).trim().replace(/[. ]+$/, '');
+        clean = `${base}${ext}`;
+    } else {
+        clean = clean.replace(/[. ]+$/, '');
+        if (clean.length > 70) clean = clean.substring(0, 70).trim().replace(/[. ]+$/, '');
+    }
+    return clean || 'adjunto.pdf';
 }
 
 async function fetchOfferDetails(ofertaId, token) {
@@ -78,7 +100,7 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
 
     for (let i = 0; i < ofertas.length; i++) {
         const oferta = ofertas[i];
-        const providerName = sanitizeFilename(oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`);
+        const providerName = sanitizeFolderName(oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`);
         console.log(`[Descarga Masiva] Fetching attachments for: ${providerName}...`);
 
         // Reportar progreso al content script de la pestaña emisora
@@ -96,19 +118,24 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
         for (const file of attachs) {
             try {
                 const base64Data = await downloadFileAsBase64(file.id, token);
-                const safeFileName = sanitizeFilename(file.filename);
-                // The filename property will dictate the relative path inside the user's Downloads folder
-                // e.g. "2284-145-COT26/1.- ProveedorName/filename.pdf"
+                const rawName = file.filename || file.nombreArchivo || file.nombre || file.name || `adjunto_${file.id}.pdf`;
+                const safeFileName = sanitizeFilename(rawName);
                 // El prefijo numerado (i+1) preserva el orden en que aparecen las ofertas en la tabla del portal.
                 const folderNumber = i + 1;
-                const relativePath = `${rootFolder}/${folderNumber}.- ${providerName}/${safeFileName}`;
+                const cleanRoot = sanitizeFolderName(rootFolder);
+                const folderName = `${folderNumber}.- ${providerName}`.replace(/[. ]+$/, '');
+                const relativePath = `${cleanRoot}/${folderName}/${safeFileName}`;
 
                 await new Promise((resolve) => {
                     chrome.downloads.download({
                         url: base64Data,
                         filename: relativePath,
-                        conflictAction: 'uniquify'
+                        conflictAction: 'uniquify',
+                        saveAs: false
                     }, (downloadId) => {
+                        if (chrome.runtime.lastError) {
+                            console.error('[Descarga Masiva] Error en descarga:', chrome.runtime.lastError.message, '| ruta:', relativePath);
+                        }
                         resolve(downloadId);
                     });
                 });
@@ -118,7 +145,7 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
                 // Add a small delay to prevent rate-limiting or browser lockup
                 await new Promise(r => setTimeout(r, 500));
             } catch (err) {
-                console.error(`[Descarga Masiva] Failed to process file ${file.filename} for ${providerName}:`, err);
+                console.error(`[Descarga Masiva] Failed to process file for ${providerName}:`, err);
             }
         }
     }
@@ -165,6 +192,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // async
     }
 });
+
 
 // Módulo Licitaciones (Voucher View): registra su propio listener para 'downloadVoucherFiles'.
 initVoucherHandler();

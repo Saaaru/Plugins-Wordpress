@@ -37,7 +37,9 @@
   // 3. Tipos de mensaje permitidos desde la web
   const ALLOWED_REQUEST_TYPES = new Set([
     'MP_SOYKODA_PING',
-    'MP_SOYKODA_FETCH'
+    'MP_SOYKODA_FETCH',
+    'MP_SOYKODA_FETCH_PROCESS',
+    'MP_SOYKODA_DOWNLOAD_FILE_BASE64'
   ]);
 
   // 4. Escuchar peticiones desde la aplicación web SoyKoda

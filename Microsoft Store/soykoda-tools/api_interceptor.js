@@ -55,6 +55,7 @@
                         type: CONFIG.processDataMessageType,
                         payload: {
                             ofertas: data.payload.ofertas,
+                            documentosAdjuntos: data.payload.documentosAdjuntos || data.payload.archivos || [],
                             token: authToken
                         }
                     }, window.location.origin);

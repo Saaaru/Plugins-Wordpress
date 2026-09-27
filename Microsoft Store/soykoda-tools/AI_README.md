@@ -85,16 +85,21 @@ sequenceDiagram
 *   **Key Operations:**
     *   **Interceptor Injection:** Dynamically appends a `<script>` tag referencing `api_interceptor.js` to the page's `<head>`, executing it inside the main webpage context, then instantly cleans it up from the DOM.
     *   **PostMessage Listener:** Receives data packages sent via `window.postMessage` from the interceptor.
-    *   **Button Injections:**
-        *   Injects `📥 Descargar todo` (Individual offer attachments) by scraping for elements containing "Adjuntos de la cotización".
-        *   Injects `📥 Descargar todas las ofertas` (Global bulk download button) adjacent to the calling phase indicator span (containing the word "Llamado").
-        *   Injects `📊 Exportar tabla a Excel` (CSV export button) next to the bulk download button.
+    *   **Button Injections (Distinct Actions):**
+        *   `📥 Descargar todo`: Injected inside single offer attachment modals.
+        *   `📥 Descargar todas las ofertas` (`handleDownloadAllOffers`): Global bulk download button adjacent to the phase indicator. Downloads **ONLY supplier offers** into `{rootFolder}/{i}.- {Proveedor}/` (filtering out `INADMISIBLE` offers). Completely isolated from other actions.
+        *   `📊 Exportar tabla a Excel` (`handleExportOffersExcel`): Exports the consolidated quotation CSV `Ofertas_{QuotaCode}.csv` with general quotation header metadata and provider offers.
+        *   `✨ Auditar cotización (Todo en 1)` (`handleFullAuditDownload`): NEW dedicated audit button that unifies the complete audit package:
+            1. Downloads buyer requirements into `0.- Requerimientos Comprador/`.
+            2. Exports enriched Excel `Ofertas_{QuotaCode}.csv` into `{rootFolder}/`.
+            3. Downloads all valid supplier offers into `{rootFolder}/{i}.- {Proveedor}/`.
     *   **Download Filtering & Dispatching:**
         *   **Local Action:** Performs direct authenticated fetch and blob creation for individual offers.
         *   **Bulk Action:** Filters out any offer whose UI card contains the text element `INADMISIBLE`.
         *   Sends the sanitized, clean list of target offer JSON items + the authorization bearer token to the background service worker using `chrome.runtime.sendMessage`.
-    *   **Progress Listener:** Listens for `downloadProgress` messages from the background worker and updates the bulk-download button text in real time (`⏳ Descargando oferta X/Y (N archivos)...`).
-    *   **Offer Data Export (`handleExportOffersExcel`):** Scrapes every `.MuiPaper-root` offer card (identified by the presence of an `a[href*="proveedor.mercadopublico.cl/ficha"]` anchor), extracts provider name, RUT (regex `\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b`), vigencia, total price (`h3` containing `$`), description, and inadmissibility status, then generates a semicolon-delimited CSV with a UTF-8 BOM (`\ufeff`) and triggers a download named `Ofertas_{QuotaCode}.csv`.
+    *   **Progress Listener:** Listens for `downloadProgress` messages from the background worker and updates the active button's text in real time (`⏳ Descargando oferta X/Y (N archivos)...`).
+    *   **Offer & Audit Data Export (`exportOffersExcel`):** Scrapes every `.MuiPaper-root` offer card (identified by `a[href*="proveedor.mercadopublico.cl/ficha"]`), extracts provider name, RUT (regex `\b\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]\b`), vigencia, total price (`h3` containing `$`), description, and inadmissibility status + reason. Prepends general quotation header metadata (Cotización, Nombre, Descripción, Plazo máximo de entrega, Presupuesto estimado, Dirección de entrega, Fecha de publicación) above the table, and saves a UTF-8 BOM semicolon-delimited CSV `Ofertas_{QuotaCode}.csv`.
+    *   **Buyer Requirements Download (`downloadBuyerAttachments`):** Resolves buyer attachments from the intercepted API data or DOM links, downloads the binary payload directly with the active Authorization token, and routes them cleanly into `${rootFolder}/0.- Requerimientos Comprador/${filename}` via `saveBlobAsFile`.
 
 ---
 

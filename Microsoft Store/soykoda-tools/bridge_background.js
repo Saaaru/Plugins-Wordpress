@@ -15,12 +15,51 @@ let sessionCache = {
 };
 const CACHE_TTL_MS = 45 * 1000; // 45 segundos de caché de probe
 
+// Restauración inmediata del token persistido desde chrome.storage.local (resiste suspensión de MV3)
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  chrome.storage.local.get(['mpAuthToken'], (result) => {
+    if (result && result.mpAuthToken) {
+      cachedAuthToken = result.mpAuthToken;
+      sessionCache = { hasSession: true, timestamp: Date.now() };
+      console.log('[Bridge BG] Token de sesión restaurado desde storage local.');
+    }
+  });
+}
+
 const ENDPOINTS = {
   compraAgilDetails: 'https://servicios-compra-agil.mercadopublico.cl/v1/compra-agil/solicitud/cotizacion/',
   compraAgilSolicitud: 'https://servicios-compra-agil.mercadopublico.cl/v1/compra-agil/solicitud/',
+  compraAgilDownload: 'https://servicios-compra-agil.mercadopublico.cl/v1/compra-agil/proveedor/cotizacion/descargarAdjunto/',
   licitacionVoucherBase: 'https://www.mercadopublico.cl/bid/modules/bid/voucherview.aspx?enc=',
   probeUrl: 'https://www.mercadopublico.cl/Portal/Modules/Site/Adquisiciones/'
 };
+
+/**
+ * Descarga un archivo protegido de Compra Ágil y lo retorna como Data URL Base64 en memoria.
+ */
+async function downloadFileAsBase64(fileId, token) {
+  const url = `${ENDPOINTS.compraAgilDownload}${encodeURIComponent(fileId)}`;
+  const response = await fetch(url, {
+    headers: { Authorization: token }
+  });
+  if (!response.ok) {
+    throw new Error(`Fallo HTTP ${response.status} al descargar archivo ${fileId}`);
+  }
+  const blob = await response.blob();
+  const mimeType = blob.type || 'application/octet-stream';
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve({
+        dataUrl: reader.result,
+        mimeType,
+        size: blob.size
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 /**
  * Valida la existencia de una sesión activa de Mercado Público.
@@ -122,6 +161,252 @@ function sanitizeDataPayload(data) {
 }
 
 /**
+ * Obtiene el token de autenticación desde memoria o chrome.storage.local.
+ */
+async function getStoredOrCookieToken() {
+  if (cachedAuthToken) return cachedAuthToken;
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const res = await new Promise((resolve) => {
+        chrome.storage.local.get(['mpAuthToken'], resolve);
+      });
+      if (res?.mpAuthToken) {
+        cachedAuthToken = res.mpAuthToken;
+        sessionCache = { hasSession: true, timestamp: Date.now() };
+        return cachedAuthToken;
+      }
+    }
+  } catch (e) {
+    console.warn('[Bridge BG] Error al buscar token en storage:', e);
+  }
+  return null;
+}
+
+/**
+ * Procesa la extracción completa de un proceso y sus ofertas con adjuntos.
+ */
+async function handleFetchProcess(payload) {
+  const hasMpSession = await checkMpSession();
+  if (!hasMpSession) {
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: false,
+        error: {
+          code: 'NO_SESSION',
+          message: 'No hay una sesión activa de Mercado Público. Inicia sesión con ClaveÚnica.'
+        }
+      }
+    };
+  }
+
+  const codigo = payload?.codigo || '';
+  const tipo = payload?.tipo || 'AG';
+
+  try {
+    // ── Compra Ágil (AG / CO) ──
+    if (tipo === 'AG' || tipo === 'CO' || codigo.toUpperCase().includes('-AG') || codigo.toUpperCase().includes('-COT')) {
+      const token = await getStoredOrCookieToken();
+      if (!token) {
+        return {
+          type: 'MP_SOYKODA_RESULT',
+          payload: {
+            ok: false,
+            error: {
+              code: 'NO_SESSION',
+              message: 'No se detectó el token de sesión de Compra Ágil. Por favor abre una cotización en Mercado Público con tu sesión activa.'
+            }
+          }
+        };
+      }
+
+      const url = `${ENDPOINTS.compraAgilSolicitud}${encodeURIComponent(codigo)}`;
+      const res = await fetch(url, {
+        headers: { Authorization: token }
+      });
+
+      if (res.status === 404) {
+        return {
+          type: 'MP_SOYKODA_RESULT',
+          payload: { ok: false, error: { code: 'NOT_FOUND', message: `Cotización ${codigo} no encontrada.` } }
+        };
+      }
+      if (!res.ok) {
+        throw new Error(`Error HTTP ${res.status} al consultar cotización en Mercado Público.`);
+      }
+
+      const json = await res.json();
+      const raw = json.payload || json;
+
+      // Desglose de ofertas
+      const rawOfertas = raw.ofertas || [];
+      const ofertas = [];
+
+      for (const of of rawOfertas) {
+        let docs = of.documentosAdjuntos || [];
+        if (!docs || docs.length === 0) {
+          try {
+            const detRes = await fetch(`${ENDPOINTS.compraAgilDetails}${encodeURIComponent(of.id)}`, {
+              headers: { Authorization: token }
+            });
+            if (detRes.ok) {
+              const detJson = await detRes.json();
+              docs = detJson?.payload?.documentosAdjuntos || [];
+            }
+          } catch (err) {
+            console.warn('[Bridge BG] Error al obtener adjuntos de oferta', of.id, err);
+          }
+        }
+
+        ofertas.push({
+          id: of.id,
+          rut: of.rutProveedor || of.rut || '',
+          razonSocial: of.razonSocial || of.nombreProveedor || `Proveedor_${of.id}`,
+          montoTotal: of.montoTotal || of.total || 0,
+          montoNeto: of.montoNeto || of.neto || 0,
+          plazoEntrega: of.plazoEntrega || of.diasEntrega || null,
+          observacion: of.observacion || of.comentario || '',
+          fechaEnvio: of.fechaEnvio || of.fechaCreacion || '',
+          documentos: (docs || []).map((d) => ({
+            id: d.id,
+            filename: d.filename || d.nombreArchivo || 'archivo.pdf',
+            size: d.size || d.tamano || 0,
+            tipo: d.tipo || d.tipoDocumento || 'adjunto'
+          }))
+        });
+      }
+
+      // Adjuntos de las bases o solicitud
+      const basesAdjuntos = (raw.documentosAdjuntos || raw.archivos || []).map((b) => ({
+        id: b.id,
+        filename: b.filename || b.nombreArchivo || 'bases.pdf',
+        size: b.size || b.tamano || 0
+      }));
+
+      const safeData = sanitizeDataPayload({
+        codigo,
+        tipo: 'AG',
+        nombre: raw.nombre || raw.descripcion || `Compra Ágil ${codigo}`,
+        organismo: raw.organismo || raw.nombreOrganismo || raw.unidadCompra || '',
+        montoEstimado: raw.montoEstimado || raw.montoTotal || null,
+        estado: raw.estado || '',
+        fechaCierre: raw.fechaCierre || '',
+        basesAdjuntos,
+        ofertas
+      });
+
+      return {
+        type: 'MP_SOYKODA_RESULT',
+        payload: {
+          ok: true,
+          data: safeData
+        }
+      };
+    }
+
+    // ── Licitaciones (LP / LE) con voucher enc ──
+    const enc = payload?.enc || '';
+    if (enc) {
+      const voucherUrl = `${ENDPOINTS.licitacionVoucherBase}${encodeURIComponent(enc)}`;
+      const res = await fetch(voucherUrl, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const parsed = await parseHtmlOffscreen(html, 'voucher');
+      return {
+        type: 'MP_SOYKODA_RESULT',
+        payload: {
+          ok: true,
+          data: sanitizeDataPayload({
+            codigo,
+            tipo: 'LP',
+            archivos: parsed.files || [],
+            paginas: parsed.totalPages || 1
+          })
+        }
+      };
+    }
+
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: false,
+        error: { code: 'NOT_SUPPORTED', message: `Tipo de proceso ${tipo} requiere parámetro enc para consultar comprobante.` }
+      }
+    };
+  } catch (err) {
+    console.error('[Bridge BG] Error en handleFetchProcess:', err);
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: false,
+        error: { code: 'FETCH_FAILED', message: err instanceof Error ? err.message : 'Error al consultar proceso.' }
+      }
+    };
+  }
+}
+
+/**
+ * Descarga un archivo protegido de Mercado Público en memoria como Data URL Base64.
+ */
+async function handleDownloadFileBase64(payload) {
+  const hasMpSession = await checkMpSession();
+  if (!hasMpSession) {
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: false,
+        error: { code: 'NO_SESSION', message: 'Sesión expirada en Mercado Público.' }
+      }
+    };
+  }
+
+  const fileId = payload?.fileId;
+  const filename = payload?.filename || 'archivo.bin';
+  const tipo = payload?.tipo || 'AG';
+
+  if (!fileId) {
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: { ok: false, error: { code: 'INVALID_ARGS', message: 'Falta fileId para la descarga.' } }
+    };
+  }
+
+  try {
+    const token = await getStoredOrCookieToken();
+    if (!token && (tipo === 'AG' || tipo === 'CO')) {
+      return {
+        type: 'MP_SOYKODA_RESULT',
+        payload: { ok: false, error: { code: 'NO_SESSION', message: 'No hay token de sesión para Compra Ágil.' } }
+      };
+    }
+
+    const res = await downloadFileAsBase64(fileId, token);
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: true,
+        data: {
+          fileId,
+          filename,
+          mime: res.mimeType,
+          base64: res.dataUrl,
+          size: res.size
+        }
+      }
+    };
+  } catch (err) {
+    console.error('[Bridge BG] Error en handleDownloadFileBase64:', err);
+    return {
+      type: 'MP_SOYKODA_RESULT',
+      payload: {
+        ok: false,
+        error: { code: 'FETCH_FAILED', message: err instanceof Error ? err.message : 'Error al descargar archivo en memoria.' }
+      }
+    };
+  }
+}
+
+/**
  * Manejador principal de peticiones del puente.
  */
 async function handleBridgeRequest(request) {
@@ -166,6 +451,14 @@ async function handleBridgeRequest(request) {
     const codigo = payload?.codigo || '';
     const tipo = payload?.tipo || 'OC';
     const action = payload?.action || 'fetch';
+
+    if (action === 'fetch_process') {
+      return handleFetchProcess(payload);
+    }
+
+    if (action === 'download_file_base64') {
+      return handleDownloadFileBase64(payload);
+    }
 
     try {
       // ── CASO A: Compra Ágil (CO / AG) con API REST ──
@@ -279,6 +572,16 @@ async function handleBridgeRequest(request) {
     }
   }
 
+  // 3. Fetch completo de proceso y ofertas (Compra Ágil / Licitación)
+  if (type === 'MP_SOYKODA_FETCH_PROCESS') {
+    return handleFetchProcess(payload);
+  }
+
+  // 4. Descarga de archivo protegido en memoria como Base64 (sin guardar en disco del usuario)
+  if (type === 'MP_SOYKODA_DOWNLOAD_FILE_BASE64') {
+    return handleDownloadFileBase64(payload);
+  }
+
   return {
     type: 'MP_SOYKODA_RESULT',
     payload: {
@@ -313,6 +616,9 @@ export function initBridgeHandler() {
     if (request.action === 'setAuthToken' && request.token) {
       cachedAuthToken = request.token;
       sessionCache = { hasSession: true, timestamp: Date.now() };
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ mpAuthToken: request.token });
+      }
       sendResponse({ success: true });
       return false;
     }

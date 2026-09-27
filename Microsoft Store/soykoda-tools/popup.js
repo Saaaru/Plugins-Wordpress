@@ -17,4 +17,15 @@
             window.close();
         });
     }
+
+    const analyzerBtn = document.getElementById('openSoykodaAnalyzer');
+    if (analyzerBtn) {
+        analyzerBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Permite abrir local o prod según entorno
+            const targetUrl = 'https://soykoda.cloud/analizador';
+            chrome.tabs.create({ url: targetUrl });
+            window.close();
+        });
+    }
 })();
