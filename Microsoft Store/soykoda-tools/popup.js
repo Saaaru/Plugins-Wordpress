@@ -18,12 +18,11 @@
         });
     }
 
-    const analyzerBtn = document.getElementById('openSoykodaAnalyzer');
-    if (analyzerBtn) {
-        analyzerBtn.addEventListener('click', (e) => {
+    const soykodaBtn = document.getElementById('openSoykoda') || document.getElementById('openSoykodaAnalyzer');
+    if (soykodaBtn) {
+        soykodaBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // Permite abrir local o prod según entorno
-            const targetUrl = 'https://soykoda.cloud/analizador';
+            const targetUrl = 'https://soykoda.cloud';
             chrome.tabs.create({ url: targetUrl });
             window.close();
         });
