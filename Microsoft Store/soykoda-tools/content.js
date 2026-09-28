@@ -25,6 +25,9 @@
             buttonBulkInitial: '📥 Descargar todas las ofertas',
             buttonBulkDownloading: '⏳ Descargando todas las ofertas...',
             buttonError: '❌ Error',
+            tooltipBulk: 'Descarga todas las ofertas',
+            tooltipExcel: 'Descarga un cuadro comparativo ordenado',
+            tooltipAudit: 'Descarga ambas cosas',
         },
         ids: {
             downloadButton: 'mp-bulk-download-ultimate',
@@ -1172,6 +1175,114 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         targetEl.insertAdjacentElement('afterend', button);
     }
 
+    let activeTooltipEl = null;
+
+    function hideActiveTooltip() {
+        if (activeTooltipEl) {
+            activeTooltipEl.remove();
+            activeTooltipEl = null;
+        }
+    }
+
+    function attachButtonTooltip(btn, text) {
+        if (!btn || !text) return;
+        btn.setAttribute('data-tooltip', text);
+        btn.setAttribute('aria-label', text);
+
+        const show = () => {
+            if (btn.disabled) return;
+            hideActiveTooltip();
+
+            const tooltipEl = document.createElement('div');
+            tooltipEl.className = 'mp-koda-button-tooltip';
+            tooltipEl.textContent = text;
+            Object.assign(tooltipEl.style, {
+                position: 'fixed',
+                zIndex: '2147483647',
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                lineHeight: '1.3',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+                boxShadow: '0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2)',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                opacity: '0',
+                transform: 'translate(-50%, 4px)',
+                transition: 'opacity 0.15s ease-out, transform 0.15s ease-out'
+            });
+
+            // Flechita indicadora
+            const arrow = document.createElement('div');
+            Object.assign(arrow.style, {
+                position: 'absolute',
+                top: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '0',
+                height: '0',
+                borderLeft: '5px solid transparent',
+                borderRight: '5px solid transparent',
+                borderTop: '5px solid #1e293b'
+            });
+            tooltipEl.appendChild(arrow);
+
+            document.body.appendChild(tooltipEl);
+            activeTooltipEl = tooltipEl;
+
+            const rect = btn.getBoundingClientRect();
+            const tipRect = tooltipEl.getBoundingClientRect();
+
+            let left = rect.left + rect.width / 2;
+            let top = rect.top - tipRect.height - 8;
+
+            // Si no cabe arriba del botón, levantarlo justo debajo
+            if (top < 10) {
+                top = rect.bottom + 8;
+                arrow.style.top = 'auto';
+                arrow.style.bottom = '100%';
+                arrow.style.borderTop = 'none';
+                arrow.style.borderBottom = '5px solid #1e293b';
+                tooltipEl.style.transform = 'translate(-50%, -4px)';
+            }
+
+            // Evitar que se desborde horizontalmente de la pantalla
+            const halfWidth = tipRect.width / 2;
+            if (left - halfWidth < 10) {
+                left = 10 + halfWidth;
+            } else if (left + halfWidth > window.innerWidth - 10) {
+                left = window.innerWidth - 10 - halfWidth;
+            }
+
+            tooltipEl.style.left = `${left}px`;
+            tooltipEl.style.top = `${top}px`;
+
+            // Animación suave de entrada
+            requestAnimationFrame(() => {
+                if (activeTooltipEl === tooltipEl) {
+                    tooltipEl.style.opacity = '1';
+                    tooltipEl.style.transform = 'translate(-50%, 0)';
+                }
+            });
+        };
+
+        const hide = () => {
+            hideActiveTooltip();
+        };
+
+        btn.addEventListener('mouseenter', show);
+        btn.addEventListener('mouseleave', hide);
+        btn.addEventListener('focus', show);
+        btn.addEventListener('blur', hide);
+        btn.addEventListener('click', hide);
+    }
+
+    window.addEventListener('scroll', hideActiveTooltip, { passive: true });
+    window.addEventListener('resize', hideActiveTooltip, { passive: true });
+
     function injectDownloadAllButton() {
         if (document.getElementById(CONFIG.ids.downloadAllButton)) return;
 
@@ -1201,8 +1312,11 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             fontWeight: 'normal',
             display: 'inline-block',
             textAlign: 'center',
-            verticalAlign: 'middle'
+            verticalAlign: 'middle',
+            transition: 'background-color 0.2s ease'
         });
+        button.onmouseover = () => { if (!button.disabled) button.style.backgroundColor = '#0072ce'; };
+        button.onmouseout = () => { if (!button.disabled) button.style.backgroundColor = '#00549f'; };
         button.onclick = handleDownloadAllOffers;
 
         // Botón 2: Exportar tabla a Excel
@@ -1221,8 +1335,11 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             fontWeight: 'normal',
             display: 'inline-block',
             textAlign: 'center',
-            verticalAlign: 'middle'
+            verticalAlign: 'middle',
+            transition: 'background-color 0.2s ease'
         });
+        excelBtn.onmouseover = () => { if (!excelBtn.disabled) excelBtn.style.backgroundColor = '#258954'; };
+        excelBtn.onmouseout = () => { if (!excelBtn.disabled) excelBtn.style.backgroundColor = '#1f7246'; };
         excelBtn.onclick = handleExportOffersExcel;
 
         // Botón 3: NUEVO BOTÓN para auditar cotización (Requerimientos comprador + Excel + Ofertas)
@@ -1241,9 +1358,17 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             fontWeight: 'bold',
             display: 'inline-block',
             textAlign: 'center',
-            verticalAlign: 'middle'
+            verticalAlign: 'middle',
+            transition: 'background-color 0.2s ease'
         });
+        auditBtn.onmouseover = () => { if (!auditBtn.disabled) auditBtn.style.backgroundColor = '#7c3aed'; };
+        auditBtn.onmouseout = () => { if (!auditBtn.disabled) auditBtn.style.backgroundColor = '#5b21b6'; };
         auditBtn.onclick = handleFullAuditDownload;
+
+        // Asignar los tooltips solicitados
+        attachButtonTooltip(button, CONFIG.texts.tooltipBulk);
+        attachButtonTooltip(excelBtn, CONFIG.texts.tooltipExcel);
+        attachButtonTooltip(auditBtn, CONFIG.texts.tooltipAudit);
 
         // Inyectamos los botones después del contenedor del texto
         injectionWrapper.insertAdjacentElement('afterend', auditBtn);
