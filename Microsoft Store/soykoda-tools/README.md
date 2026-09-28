@@ -70,18 +70,16 @@ Analiza el presupuesto oficial cargado en la ficha y evalúa cada oferta económ
   4. Monitorea y espera la aparición de la advertencia irreversible mediante un `MutationObserver`.
   5. Realiza la confirmación final del descarte, todo en menos de 2 segundos de forma segura.
 
-### 4. 📊 Exportación de Ofertas a Excel/CSV
-Extrae y consolida automáticamente los datos de todas las ofertas visibles en el cuadro comparativo y los exporta a un archivo CSV listo para abrir en Microsoft Excel.
+### 4. 📊 Exportación de Ofertas y Productos a Excel (.xlsx)
+Extrae y consolida automáticamente los datos de la cotización, sus ofertas y el listado de productos solicitados en un archivo de Excel nativo (`.xlsx`) estructurado en **dos hojas**:
 * **Botón Dedicado**: Se inyecta un botón verde `📊 Exportar tabla a Excel` junto al de descarga masiva.
-* **Datos Capturados por Oferta**:
-  * Razón Social del proveedor.
-  * RUT (formato chileno `XX.XXX.XXX-X`).
-  * Descripción de la oferta.
-  * Vigencia de la oferta.
-  * Monto total.
-  * Estado de inadmisibilidad (`SÍ` / `NO`).
-* **Compatibilidad Total con Excel**: Genera un archivo delimitado por punto y coma (`;`) con marca de orden de bytes UTF-8 (BOM) para garantizar que los acentos y caracteres especiales se visualicen correctamente al abrirlo.
-* **Naming Automático**: El archivo se nombra automáticamente con el código de cotización (ej. `Ofertas_2284-145-COT26.csv`).
+* **Hoja 1 ("Ofertas")**:
+  * Metadatos generales de cabecera: Cotización, Nombre, Descripción, Plazo máximo de entrega, Presupuesto estimado, Dirección de entrega, Fecha de publicación.
+  * Tabla comparativa de ofertas: Razón Social, RUT, Empresa Menor Tamaño (`EMPRESA DE MENOR TAMAÑO` / `NO EMT`), Descripción de la Oferta, Vigencia, Monto Total, Inadmisible y Motivo de Inadmisibilidad.
+* **Hoja 2 ("Productos Solicitados")**:
+  * Listado completo de los productos requeridos por el comprador con columnas: `ID` | `NOMBRE` | `DESCRIPCION` | `CANTIDAD`.
+* **Formato Nativo .xlsx (OpenXML)**: Generado directamente en el navegador con anchos de columnas optimizados y estilos de encabezado, compatible al 100% con Microsoft Excel, Google Sheets y LibreOffice sin advertencias.
+* **Naming Automático**: El archivo se nombra automáticamente con el código de cotización (ej. `Ofertas_2284-145-COT26.xlsx`).
 
 ### 5. 🏛️ Descarga Masiva de Adjuntos en Licitaciones (Voucher View) — *NUEVO*
 Extiende la capacidad de descarga masiva al portal legacy de **Licitaciones** (`voucherview.aspx`, ASP.NET WebForms), independiente del módulo Compra Ágil.

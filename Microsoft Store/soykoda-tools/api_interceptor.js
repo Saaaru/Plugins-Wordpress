@@ -56,6 +56,7 @@
                         payload: {
                             ofertas: data.payload.ofertas,
                             documentosAdjuntos: data.payload.documentosAdjuntos || data.payload.archivos || [],
+                            productos: data.payload.productos || data.payload.items || data.payload.articulos || data.payload.solicitudItems || [],
                             token: authToken
                         }
                     }, window.location.origin);
