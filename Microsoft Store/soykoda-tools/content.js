@@ -1060,7 +1060,7 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             console.log(`[Auditoría] Descargados ${buyerAttachmentsCount} requerimiento(s) del comprador.`);
 
             // Limpiar modo captura en background si existiera
-            chrome.runtime.sendMessage({ action: 'clearBuyerAttachments' }).catch(() => {});
+            chrome.runtime.sendMessage({ action: 'clearBuyerAttachments' }).catch(() => { });
 
             // 2. Exportar el nuevo Excel consolidado con datos generales en la cabecera
             button.textContent = '⏳ Generando Excel consolidado...';
@@ -1088,7 +1088,7 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             if (filteredOfertas.length === 0) {
                 button.textContent = '✅ Completado';
                 setTimeout(() => {
-                    button.textContent = '✨ Auditar cotización (Todo en 1)';
+                    button.textContent = '✨ Descargar todo';
                     button.disabled = false;
                 }, 3000);
                 return;
@@ -1106,7 +1106,7 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
                 button.textContent = '✅ Completado';
 
                 setTimeout(() => {
-                    button.textContent = '✨ Auditar cotización (Todo en 1)';
+                    button.textContent = '✨ Descargar todo';
                     button.disabled = false;
                 }, 3000);
             });
@@ -1115,7 +1115,7 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             console.error('[Auditoría] Error durante el proceso:', err);
             button.textContent = '❌ Error';
             setTimeout(() => {
-                button.textContent = '✨ Auditar cotización (Todo en 1)';
+                button.textContent = '✨ Descargar todo';
                 button.disabled = false;
             }, 3000);
         }
@@ -1208,7 +1208,7 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         // Botón 3: NUEVO BOTÓN para auditar cotización (Requerimientos comprador + Excel + Ofertas)
         const auditBtn = document.createElement('button');
         auditBtn.id = 'mp-audit-all-offers';
-        auditBtn.textContent = '✨ Auditar cotización (Todo en 1)';
+        auditBtn.textContent = '✨ Descargar todo';
         Object.assign(auditBtn.style, {
             marginLeft: '10px',
             padding: '6px 12px',
@@ -1238,13 +1238,13 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         if (event.data.type === 'MP_DATA_FROM_PAGE') {
             interceptedData = event.data.payload;
             if (event.data.payload?.token) {
-                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => {});
+                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
             }
             setTimeout(injectDownloadButton, 500);
         } else if (event.data.type === 'MP_ALL_OFFERS_FROM_PAGE') {
             allOffersData = event.data.payload;
             if (event.data.payload?.token) {
-                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => {});
+                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
             }
             setTimeout(injectDownloadAllButton, 500);
         }
