@@ -219,7 +219,12 @@
                                 action: 'saveBlobAsFile',
                                 base64: reader.result,
                                 filename: relativePath
-                            }, () => resolve());
+                            }, (res) => {
+                                if (chrome.runtime.lastError) {
+                                    console.warn('[Auditoría] Error al guardar archivo:', chrome.runtime.lastError.message);
+                                }
+                                resolve(res);
+                            });
                         };
                         reader.readAsDataURL(blob);
                     });
@@ -258,7 +263,12 @@
                                     action: 'saveBlobAsFile',
                                     base64: reader.result,
                                     filename: relativePath
-                                }, () => resolve());
+                                }, (res) => {
+                                    if (chrome.runtime.lastError) {
+                                        console.warn('[Auditoría] Error al guardar archivo:', chrome.runtime.lastError.message);
+                                    }
+                                    resolve(res);
+                                });
                             };
                             reader.readAsDataURL(blob);
                         });
@@ -1031,7 +1041,12 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
             token: allOffersData.token,
             rootFolder: rootFolder
         }, (response) => {
-            button.textContent = CONFIG.texts.buttonDone;
+            if (chrome.runtime.lastError) {
+                console.error('[Descarga Masiva] Error de comunicación:', chrome.runtime.lastError.message);
+                button.textContent = '❌ Error';
+            } else {
+                button.textContent = CONFIG.texts.buttonDone;
+            }
 
             setTimeout(() => {
                 button.textContent = CONFIG.texts.buttonBulkInitial;
@@ -1103,7 +1118,12 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
                 token: allOffersData.token,
                 rootFolder: rootFolder
             }, (response) => {
-                button.textContent = '✅ Completado';
+                if (chrome.runtime.lastError) {
+                    console.error('[Auditoría] Error de comunicación:', chrome.runtime.lastError.message);
+                    button.textContent = '❌ Error';
+                } else {
+                    button.textContent = '✅ Completado';
+                }
 
                 setTimeout(() => {
                     button.textContent = '✨ Descargar todo';

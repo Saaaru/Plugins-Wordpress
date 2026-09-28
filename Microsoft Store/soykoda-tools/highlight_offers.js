@@ -23,6 +23,8 @@ console.log(">>> highlight_offers.js (v4) cargado correctamente");
         return Array.from(elements).find(el => el.textContent.trim() === text);
     }
 
+    let lastLoggedBudget = null;
+
     // --- FUNCIÓN CLAVE MEJORADA Y CORREGIDA ---
     // Obtiene la información de presupuesto y tipo
     function getBudgetInfo() {
@@ -67,8 +69,11 @@ console.log(">>> highlight_offers.js (v4) cargado correctamente");
         const amount = cleanCurrency(valueElement.textContent);
         const type = typeElement.textContent.trim();
 
-        // ¡Esta línea ahora debería mostrar el tipo correcto!
-        console.log(`Presupuesto detectado: ${amount} (${type})`);
+        const budgetKey = `${amount}_${type}`;
+        if (lastLoggedBudget !== budgetKey) {
+            console.log(`Presupuesto detectado: ${amount} (${type})`);
+            lastLoggedBudget = budgetKey;
+        }
 
         return { amount, type };
     }
@@ -267,6 +272,8 @@ console.log(">>> highlight_offers.js (v4) cargado correctamente");
     }
 
     // El resto del script (runHighlighter y MutationObserver) no necesita cambios.
+    let debounceTimer = null;
+
     function runHighlighter() {
         const budget = getBudgetInfo();
         if (!budget) {
@@ -276,15 +283,27 @@ console.log(">>> highlight_offers.js (v4) cargado correctamente");
     }
 
     const observer = new MutationObserver(() => {
-        // Una buena condición es esperar tanto la info del presupuesto como las ofertas
-        const budgetInfoExists = document.body.innerText.includes('Presupuesto estimado');
-        // Usamos el 'Monto total' como señal de que las ofertas han cargado
-        const offersExist = document.body.innerText.includes('Monto total');
-
-        if (budgetInfoExists && offersExist) {
-            console.log("Contenido detectado. Ejecutando resaltador...");
-            setTimeout(runHighlighter, 500);
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
         }
+        debounceTimer = setTimeout(() => {
+            const bodyText = document.body.textContent || '';
+            const budgetInfoExists = bodyText.includes('Presupuesto estimado');
+            const offersExist = bodyText.includes('Monto total');
+
+            if (budgetInfoExists && offersExist) {
+                // Solo ejecutar si hay tarjetas con precios sin procesar
+                const unhighlightedCards = Array.from(document.querySelectorAll('h3'))
+                    .filter(h3 => h3.textContent.includes('$'))
+                    .map(h3 => h3.closest('.MuiPaper-root'))
+                    .filter(card => card && !card.dataset.highlighted);
+
+                if (unhighlightedCards.length > 0) {
+                    console.log(`Contenido detectado (${unhighlightedCards.length} oferta(s) por procesar). Ejecutando resaltador...`);
+                    runHighlighter();
+                }
+            }
+        }, 350);
     });
 
     console.log("Iniciando MutationObserver para esperar el contenido dinámico...");
