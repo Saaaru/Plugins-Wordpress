@@ -160,6 +160,62 @@
         return directVal || '';
     }
 
+    function formatBudgetType(val) {
+        if (!val) return '';
+        const trimmed = val.trim();
+        const lower = trimmed.toLowerCase();
+        if (lower.includes('disponible')) return 'Disponible';
+        if (lower.includes('estimado')) return 'Estimado';
+        return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    }
+
+    function getBudgetType() {
+        // 1. Intentar por etiqueta directa 'Tipo de presupuesto'
+        let directVal = getFieldValueByLabel('Tipo de presupuesto');
+        if (directVal) {
+            return formatBudgetType(directVal);
+        }
+
+        // 2. Búsqueda contextual cerca de 'Tipo de presupuesto'
+        const elements = Array.from(document.querySelectorAll('p, span, dt, dd, div, label'));
+        const label = elements.find(el => el.textContent.trim().toLowerCase() === 'tipo de presupuesto');
+        if (label) {
+            const gridItem = label.closest('.MuiGrid-item');
+            if (gridItem && gridItem.nextElementSibling) {
+                const valP = gridItem.nextElementSibling.querySelector('p');
+                if (valP && valP.textContent.trim()) {
+                    return formatBudgetType(valP.textContent.trim());
+                }
+                const text = gridItem.nextElementSibling.textContent.trim();
+                if (text) return formatBudgetType(text);
+            }
+            const container = label.closest('.MuiGrid-container');
+            if (container) {
+                const valP = Array.from(container.querySelectorAll('p')).find(p => p !== label && p.textContent.trim() !== '');
+                if (valP) return formatBudgetType(valP.textContent.trim());
+            }
+        }
+
+        // 3. Fallback regex en el texto de la página
+        try {
+            const bodyText = document.body ? document.body.innerText : '';
+            const match = bodyText.match(/Tipo\s+de\s+presupuesto[\s\S]{0,50}?(Disponible|Estimado)/i);
+            if (match && match[1]) {
+                return formatBudgetType(match[1]);
+            }
+        } catch (e) { }
+
+        // 4. Fallback por notas de presupuesto inyectadas en pantalla
+        const budgetNote = document.querySelector('.budget-note');
+        if (budgetNote) {
+            const noteText = budgetNote.textContent.toLowerCase();
+            if (noteText.includes('disponible')) return 'Disponible';
+            if (noteText.includes('estimado')) return 'Estimado';
+        }
+
+        return '';
+    }
+
     function extractGeneralInfo() {
         return {
             codigo: extractQuotationCode() || '',
@@ -167,6 +223,7 @@
             descripcion: getFieldValueByLabel('Descripción'),
             plazoEntrega: getFieldValueByLabel('Plazo máximo de entrega'),
             presupuesto: getBudgetAmount(),
+            tipoPresupuesto: getBudgetType(),
             direccionEntrega: getFieldValueByLabel('Dirección de entrega'),
             fechaPublicacion: getFieldValueByLabel('Fecha de publicación')
         };
@@ -860,6 +917,9 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         }
         if (generalInfo.presupuesto) {
             sheet1Rows.push([{ val: 'Presupuesto estimado', style: 2 }, { val: generalInfo.presupuesto }]);
+        }
+        if (generalInfo.tipoPresupuesto) {
+            sheet1Rows.push([{ val: 'Tipo de presupuesto', style: 2 }, { val: generalInfo.tipoPresupuesto }]);
         }
         if (generalInfo.direccionEntrega) {
             sheet1Rows.push([{ val: 'Dirección de entrega', style: 2 }, { val: generalInfo.direccionEntrega }]);

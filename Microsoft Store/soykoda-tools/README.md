@@ -74,7 +74,7 @@ Analiza el presupuesto oficial cargado en la ficha y evalúa cada oferta económ
 Extrae y consolida automáticamente los datos de la cotización, sus ofertas y el listado de productos solicitados en un archivo de Excel nativo (`.xlsx`) estructurado en **dos hojas**:
 * **Botón Dedicado**: Se inyecta un botón verde `📊 Exportar tabla a Excel` junto al de descarga masiva.
 * **Hoja 1 ("Ofertas")**:
-  * Metadatos generales de cabecera: Cotización, Nombre, Descripción, Plazo máximo de entrega, Presupuesto estimado, Dirección de entrega, Fecha de publicación.
+  * Metadatos generales de cabecera: Cotización, Nombre, Descripción, Plazo máximo de entrega, Presupuesto estimado, Tipo de presupuesto, Dirección de entrega, Fecha de publicación.
   * Tabla comparativa de ofertas: Razón Social, RUT, Empresa Menor Tamaño (`EMPRESA DE MENOR TAMAÑO` / `NO EMT`), Descripción de la Oferta, Vigencia, Monto Total, Inadmisible y Motivo de Inadmisibilidad.
 * **Hoja 2 ("Productos Solicitados")**:
   * Listado completo de los productos requeridos por el comprador con columnas: `ID` | `NOMBRE` | `DESCRIPCION` | `CANTIDAD`.
