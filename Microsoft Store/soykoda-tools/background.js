@@ -94,10 +94,141 @@ async function downloadFileAsBase64(fileId, token) {
     });
 }
 
+// Gestión de descargas silenciosas (se guardan en disco pero se ocultan del menú/historial del navegador)
+const silentDownloadIds = new Set();
+
+chrome.downloads.onChanged.addListener((delta) => {
+    if (silentDownloadIds.has(delta.id)) {
+        if (delta.state && (delta.state.current === 'complete' || delta.state.current === 'interrupted')) {
+            silentDownloadIds.delete(delta.id);
+            chrome.downloads.erase({ id: delta.id }, () => {
+                if (chrome.runtime.lastError) { /* ignore */ }
+            });
+        }
+    }
+});
+
+function eraseDownloadFromHistory(downloadId) {
+    if (!downloadId) return;
+    silentDownloadIds.add(downloadId);
+
+    // Si ya completó de inmediato (común en Data URLs locales generadas en memoria)
+    chrome.downloads.search({ id: downloadId }, (items) => {
+        if (items && items[0] && (items[0].state === 'complete' || items[0].state === 'interrupted')) {
+            silentDownloadIds.delete(downloadId);
+            chrome.downloads.erase({ id: downloadId }, () => {
+                if (chrome.runtime.lastError) { /* ignore */ }
+            });
+        }
+    });
+}
+
+
+function generateOfertaTxtContent(oferta, folderNumber, rootFolder) {
+    const quotaCode = oferta.quotaCode || rootFolder || '';
+    const provider = oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`;
+    const rut = oferta.rut || '';
+    const emt = oferta.emt || (oferta.esEmpresaMenorTamano ? 'EMPRESA DE MENOR TAMAÑO' : 'NO EMT');
+    const price = oferta.price || (oferta.montoTotal ? `$ ${Number(oferta.montoTotal).toLocaleString('es-CL')}` : '');
+    const vigencia = oferta.vigencia || '';
+    const estado = oferta.inadmisible === 'SÍ' ? 'INADMISIBLE' : 'ADMISIBLE';
+    const desc = (oferta.description || oferta.descripcion || oferta.comentario || '').trim();
+
+    const lines = [
+        `COTIZACION: ${quotaCode}`,
+        `OFERTA_NRO: ${folderNumber}`,
+        `PROVEEDOR: ${provider}`,
+        `RUT: ${rut}`,
+        `EMT: ${emt}`,
+        `MONTO_TOTAL: ${price}`,
+        `VIGENCIA: ${vigencia}`,
+        `ESTADO: ${estado}`
+    ];
+
+    if (oferta.motivoInadmisible) {
+        lines.push(`MOTIVO_INADMISIBLE: ${oferta.motivoInadmisible}`);
+    }
+
+    lines.push(`DESCRIPCION: ${desc}`);
+
+    return lines.join('\r\n') + '\r\n';
+}
+
 async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPublico_Ofertas', sender) {
     let totalDownloaded = 0;
     const totalOffers = ofertas.length;
+    const cleanRoot = sanitizeFolderName(rootFolder);
 
+    // =========================================================================
+    // FASE 1: Creación inmediata de la estructura de carpetas con oferta.txt
+    // (Descarga silenciosa: crea la carpeta en disco y se borra de la lista del navegador)
+    // =========================================================================
+    // Limpieza de entradas anteriores de oferta.txt en el menú del navegador
+    try {
+        chrome.downloads.erase({ filenameRegex: '.*[\\\\/]oferta\\.txt$' }, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+        });
+    } catch (_) { }
+
+    console.log(`[Descarga Masiva] FASE 1: Creando estructura para ${totalOffers} carpetas con oferta.txt...`);
+    for (let i = 0; i < ofertas.length; i++) {
+        const oferta = ofertas[i];
+        const providerName = sanitizeFolderName(oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`);
+        const folderNumber = i + 1;
+        const folderName = `${folderNumber}.- ${providerName}`.replace(/[. ]+$/, '');
+        const txtRelativePath = `${cleanRoot}/${folderName}/oferta.txt`;
+
+        if (sender && sender.tab && sender.tab.id) {
+            chrome.tabs.sendMessage(sender.tab.id, {
+                action: 'downloadPhase',
+                phase: 'creatingFolders',
+                current: i + 1,
+                total: totalOffers
+            }).catch(() => { });
+        }
+
+        try {
+            const txtContent = generateOfertaTxtContent(oferta, folderNumber, rootFolder);
+            const txtDataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(txtContent);
+
+            await new Promise((resolve) => {
+                chrome.downloads.download({
+                    url: txtDataUrl,
+                    filename: txtRelativePath,
+                    conflictAction: 'overwrite',
+                    saveAs: false
+                }, (downloadId) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[Descarga Masiva] Error creando oferta.txt:', chrome.runtime.lastError.message, '| ruta:', txtRelativePath);
+                    } else if (downloadId) {
+                        // Ocultar de la lista de descargas del navegador (el archivo permanece intacto en disco)
+                        eraseDownloadFromHistory(downloadId);
+                    }
+                    resolve(downloadId);
+                });
+            });
+
+            totalDownloaded++;
+            // Pausa pequeña para asegurar orden y evitar saturación en el gestor de descargas
+            await new Promise(r => setTimeout(r, 60));
+        } catch (err) {
+            console.error(`[Descarga Masiva] Error al crear oferta.txt para ${providerName}:`, err);
+        }
+    }
+
+    // Barrido final para asegurar que ninguna entrada de oferta.txt quede visible en el navegador
+    setTimeout(() => {
+        chrome.downloads.erase({ filenameRegex: '.*[\\\\/]oferta\\.txt$' }, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+        });
+    }, 500);
+
+    console.log(`[Descarga Masiva] FASE 1 Finalizada. Estructura de carpetas lista.`);
+
+    // =========================================================================
+    // FASE 2: Descarga de los adjuntos desde el portal
+    // =========================================================================
+    console.log(`[Descarga Masiva] FASE 2: Descargando adjuntos de ofertas desde el portal...`);
     for (let i = 0; i < ofertas.length; i++) {
         const oferta = ofertas[i];
         const providerName = sanitizeFolderName(oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`);
@@ -120,9 +251,7 @@ async function handleAllOffersDownload(ofertas, token, rootFolder = 'MercadoPubl
                 const base64Data = await downloadFileAsBase64(file.id, token);
                 const rawName = file.filename || file.nombreArchivo || file.nombre || file.name || `adjunto_${file.id}.pdf`;
                 const safeFileName = sanitizeFilename(rawName);
-                // El prefijo numerado (i+1) preserva el orden en que aparecen las ofertas en la tabla del portal.
                 const folderNumber = i + 1;
-                const cleanRoot = sanitizeFolderName(rootFolder);
                 const folderName = `${folderNumber}.- ${providerName}`.replace(/[. ]+$/, '');
                 const relativePath = `${cleanRoot}/${folderName}/${safeFileName}`;
 

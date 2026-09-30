@@ -1062,6 +1062,45 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         }
     }
 
+    function enrichOffersWithMetadata(ofertasList) {
+        const domOffers = extractOffersData();
+        const quotaCode = extractQuotationCode();
+
+        return ofertasList.map(oferta => {
+            const pName = (oferta.razonSocial || oferta.nombre || '').trim();
+            const pRut = (oferta.rut || oferta.rutProveedor || '').replace(/\./g, '').trim().toLowerCase();
+
+            const domMatch = domOffers.find(d => {
+                const dName = (d.razonSocial || '').trim();
+                const dRut = (d.rut || '').replace(/\./g, '').trim().toLowerCase();
+                if (pName && dName && (
+                    pName.toLowerCase() === dName.toLowerCase() ||
+                    pName.toLowerCase().includes(dName.toLowerCase()) ||
+                    dName.toLowerCase().includes(pName.toLowerCase())
+                )) {
+                    return true;
+                }
+                if (pRut && dRut && pRut === dRut) {
+                    return true;
+                }
+                return false;
+            });
+
+            return {
+                ...oferta,
+                quotaCode: quotaCode,
+                razonSocial: domMatch?.razonSocial || oferta.razonSocial || oferta.nombre || `Proveedor_${oferta.id}`,
+                rut: domMatch?.rut || oferta.rut || oferta.rutProveedor || '',
+                emt: domMatch?.emt || (oferta.esEmpresaMenorTamano ? 'EMPRESA DE MENOR TAMAÑO' : (oferta.emt || 'NO EMT')),
+                description: domMatch?.description || oferta.descripcion || oferta.comentario || '',
+                price: domMatch?.price || (oferta.montoTotal ? `$ ${Number(oferta.montoTotal).toLocaleString('es-CL')}` : (oferta.precio || '')),
+                vigencia: domMatch?.vigencia || oferta.vigencia || '',
+                inadmisible: domMatch?.inadmisible || (oferta.inadmisible ? 'SÍ' : 'NO'),
+                motivoInadmisible: domMatch?.motivoInadmisible || oferta.motivoInadmisible || ''
+            };
+        });
+    }
+
     function handleDownloadAllOffers() {
         if (!allOffersData || !allOffersData.ofertas || !allOffersData.token) return;
 
@@ -1097,25 +1136,37 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
         button.textContent = CONFIG.texts.buttonBulkDownloading;
         button.disabled = true;
 
-        // Enviar mensaje al background script para descargar ÚNICAMENTE las ofertas
-        chrome.runtime.sendMessage({
-            action: 'downloadAllOffers',
-            ofertas: filteredOfertas,
-            token: allOffersData.token,
-            rootFolder: rootFolder
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error('[Descarga Masiva] Error de comunicación:', chrome.runtime.lastError.message);
-                button.textContent = '❌ Error';
-            } else {
-                button.textContent = CONFIG.texts.buttonDone;
-            }
+        const enrichedOfertas = enrichOffersWithMetadata(filteredOfertas);
 
-            setTimeout(() => {
-                button.textContent = CONFIG.texts.buttonBulkInitial;
-                button.disabled = false;
-            }, 3000);
-        });
+        try {
+            if (!chrome.runtime?.id) {
+                throw new Error("Extension context invalidated");
+            }
+            // Enviar mensaje al background script para descargar ÚNICAMENTE las ofertas
+            chrome.runtime.sendMessage({
+                action: 'downloadAllOffers',
+                ofertas: enrichedOfertas,
+                token: allOffersData.token,
+                rootFolder: rootFolder
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error('[Descarga Masiva] Error de comunicación:', chrome.runtime.lastError.message);
+                    button.textContent = '❌ Error';
+                } else {
+                    button.textContent = CONFIG.texts.buttonDone;
+                }
+
+                setTimeout(() => {
+                    button.textContent = CONFIG.texts.buttonBulkInitial;
+                    button.disabled = false;
+                }, 3000);
+            });
+        } catch (err) {
+            console.error('[Descarga Masiva] Error de comunicación con la extensión:', err);
+            button.textContent = '⚠️ Recarga (F5)';
+            button.disabled = false;
+            alert('Por favor recarga esta página de Mercado Público (F5). La extensión fue actualizada recientemente y el navegador necesita reconectar la pestaña.');
+        }
     }
 
     async function handleFullAuditDownload() {
@@ -1174,10 +1225,12 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
 
             button.textContent = '⏳ Descargando ofertas de proveedores...';
 
+            const enrichedOfertas = enrichOffersWithMetadata(filteredOfertas);
+
             // 4. Descargar adjuntos de las ofertas de proveedores
             chrome.runtime.sendMessage({
                 action: 'downloadAllOffers',
-                ofertas: filteredOfertas,
+                ofertas: enrichedOfertas,
                 token: allOffersData.token,
                 rootFolder: rootFolder
             }, (response) => {
@@ -1442,14 +1495,18 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
 
         if (event.data.type === 'MP_DATA_FROM_PAGE') {
             interceptedData = event.data.payload;
-            if (event.data.payload?.token) {
-                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
+            if (event.data.payload?.token && chrome.runtime?.id) {
+                try {
+                    chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
+                } catch (_) { }
             }
             setTimeout(injectDownloadButton, 500);
         } else if (event.data.type === 'MP_ALL_OFFERS_FROM_PAGE') {
             allOffersData = event.data.payload;
-            if (event.data.payload?.token) {
-                chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
+            if (event.data.payload?.token && chrome.runtime?.id) {
+                try {
+                    chrome.runtime.sendMessage({ action: 'setAuthToken', token: event.data.payload.token }).catch(() => { });
+                } catch (_) { }
             }
             setTimeout(injectDownloadAllButton, 500);
         }
@@ -1461,7 +1518,16 @@ ${sheets.map((s, i) => `    <sheet name="${escapeXml(s.name.substring(0, 31))}" 
 
     // Escucha mensajes de progreso enviados por el background script durante la descarga masiva
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === 'downloadProgress') {
+        if (request.action === 'downloadPhase' && request.phase === 'creatingFolders') {
+            const button = document.getElementById(CONFIG.ids.downloadAllButton);
+            if (button && button.disabled) {
+                button.textContent = `📁 Creando carpetas: ${request.current}/${request.total}...`;
+            }
+            const auditBtn = document.getElementById('mp-audit-all-offers');
+            if (auditBtn && auditBtn.disabled) {
+                auditBtn.textContent = `📁 Creando carpetas: ${request.current}/${request.total}...`;
+            }
+        } else if (request.action === 'downloadProgress') {
             const button = document.getElementById(CONFIG.ids.downloadAllButton);
             if (button && button.disabled) {
                 button.textContent = `⏳ Descargando oferta ${request.currentOffer}/${request.totalOffers} (${request.filesDownloaded} archivos)...`;

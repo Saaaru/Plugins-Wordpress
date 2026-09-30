@@ -239,37 +239,42 @@ async function handleFetchProcess(payload) {
       const raw = json.payload || json;
 
       // Desglose de ofertas
-      const rawOfertas = raw.ofertas || [];
+      const rawOfertas = raw.ofertas || raw.proveedores_cotizando || [];
       const ofertas = [];
 
       for (const of of rawOfertas) {
-        let docs = of.documentosAdjuntos || [];
-        if (!docs || docs.length === 0) {
+        const offerId = of.id || of.id_cotizacion || of.idCotizacion;
+        let docs = of.documentosAdjuntos || of.documentos || [];
+        if ((!docs || docs.length === 0) && offerId) {
           try {
-            const detRes = await fetch(`${ENDPOINTS.compraAgilDetails}${encodeURIComponent(of.id)}`, {
+            const detRes = await fetch(`${ENDPOINTS.compraAgilDetails}${encodeURIComponent(offerId)}`, {
               headers: { Authorization: token }
             });
             if (detRes.ok) {
               const detJson = await detRes.json();
-              docs = detJson?.payload?.documentosAdjuntos || [];
+              docs = detJson?.payload?.documentosAdjuntos || detJson?.payload?.documentos || [];
             }
           } catch (err) {
-            console.warn('[Bridge BG] Error al obtener adjuntos de oferta', of.id, err);
+            console.warn('[Bridge BG] Error al obtener adjuntos de oferta', offerId, err);
           }
         }
 
+        const isEmt = of.es_emt === 1 || of.es_emt === true || of.esEmt === true;
+        const noEmt = of.es_emt === 0 || of.es_emt === false || of.esEmt === false;
+
         ofertas.push({
-          id: of.id,
-          rut: of.rutProveedor || of.rut || '',
-          razonSocial: of.razonSocial || of.nombreProveedor || `Proveedor_${of.id}`,
-          montoTotal: of.montoTotal || of.total || 0,
-          montoNeto: of.montoNeto || of.neto || 0,
-          plazoEntrega: of.plazoEntrega || of.diasEntrega || null,
-          observacion: of.observacion || of.comentario || '',
-          fechaEnvio: of.fechaEnvio || of.fechaCreacion || '',
+          id: offerId,
+          rut: of.rutProveedor || of.rut_proveedor || of.rut || '',
+          razonSocial: of.razonSocial || of.razon_social || of.nombreProveedor || of.nombre_proveedor || `Proveedor_${offerId}`,
+          montoTotal: of.montoTotal || of.monto_total || of.total || 0,
+          montoNeto: of.montoNeto || of.valor_neto || of.neto || 0,
+          plazoEntrega: of.plazoEntrega || of.plazo_entrega || of.diasEntrega || null,
+          observacion: of.observacion || of.descripcion || of.descripcion_cotizacion || of.comentario || '',
+          empresaMenorTamano: isEmt ? 'Sí' : noEmt ? 'No' : undefined,
+          fechaEnvio: of.fechaEnvio || of.fecha_creacion || of.fechaCreacion || '',
           documentos: (docs || []).map((d) => ({
             id: d.id,
-            filename: d.filename || d.nombreArchivo || 'archivo.pdf',
+            filename: d.filename || d.nombreArchivo || d.nombre || 'archivo.pdf',
             size: d.size || d.tamano || 0,
             tipo: d.tipo || d.tipoDocumento || 'adjunto'
           }))
@@ -277,9 +282,9 @@ async function handleFetchProcess(payload) {
       }
 
       // Adjuntos de las bases o solicitud
-      const basesAdjuntos = (raw.documentosAdjuntos || raw.archivos || []).map((b) => ({
+      const basesAdjuntos = (raw.documentosAdjuntos || raw.documentos || raw.archivos || []).map((b) => ({
         id: b.id,
-        filename: b.filename || b.nombreArchivo || 'bases.pdf',
+        filename: b.filename || b.nombreArchivo || b.nombre || 'bases.pdf',
         size: b.size || b.tamano || 0
       }));
 
@@ -287,10 +292,12 @@ async function handleFetchProcess(payload) {
         codigo,
         tipo: 'AG',
         nombre: raw.nombre || raw.descripcion || `Compra Ágil ${codigo}`,
-        organismo: raw.organismo || raw.nombreOrganismo || raw.unidadCompra || '',
-        montoEstimado: raw.montoEstimado || raw.montoTotal || null,
-        estado: raw.estado || '',
-        fechaCierre: raw.fechaCierre || '',
+        organismo: raw.organismo || raw.institucion?.organismo_comprador || raw.nombreOrganismo || raw.unidadCompra || '',
+        montoEstimado: raw.montoEstimado || raw.presupuesto?.monto_disponible || raw.presupuesto?.presupuesto_estimado || raw.montoTotal || null,
+        tipoPresupuesto: raw.tipoPresupuesto || raw.presupuesto?.tipo_presupuesto || 'Disponible',
+        plazoEntrega: raw.plazoEntrega || (raw.entrega?.plazo_entrega_dias ? `${raw.entrega.plazo_entrega_dias} días hábiles` : null),
+        estado: raw.estado?.glosa || raw.estado || '',
+        fechaCierre: raw.fechaCierre || raw.fechas?.fecha_cierre || '',
         basesAdjuntos,
         ofertas
       });
